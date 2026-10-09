@@ -554,6 +554,32 @@ export async function ingestFile(home, file, opts = {}) {
   return { sessionId: extracted.sessionId, fresh, results };
 }
 
+// Mark every existing session as seen at install time so `watch` only learns
+// from work that happens AFTER `trail init`. Manual `ingest` still backfills.
+export async function seedSessions(home, accountRoot) {
+  const sessDir = path.join(accountRoot, "sessions");
+  const stateFile = path.join(home, "state.json");
+  const state = (await loadJson(stateFile)) ?? { sessions: {} };
+  let entries = [];
+  try {
+    entries = await fs.readdir(sessDir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  let n = 0;
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const f = path.join(sessDir, e.name, "messages.jsonl");
+    const id = e.name.split("_").pop();
+    if (state.sessions[id]) continue;
+    const stat = await fs.stat(f).catch(() => null);
+    state.sessions[id] = { dir: e.name, bytes: stat ? stat.size : 0, seeded: true };
+    n++;
+  }
+  await saveJson(stateFile, state);
+  return n;
+}
+
 export async function scanSessions(home, accountRoot) {
   const sessDir = path.join(accountRoot, "sessions");
   let entries = [];
@@ -577,6 +603,8 @@ export async function scanSessions(home, accountRoot) {
   for (const f of files) out.push(await ingestFile(home, f));
   return out;
 }
+
+// (see seedSessions above for install-time baseline)
 
 // ---------- report ----------
 

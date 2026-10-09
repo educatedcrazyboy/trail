@@ -104,6 +104,23 @@ test("a changed path after learning records a correction", async () => {
   assert.match(memMd, /\/memo\/write/);
 });
 
+test("seedSessions baselines existing sessions so watch skips them", async () => {
+  const home = await tmp();
+  const acct = path.join(home, "acct");
+  const sessDir = path.join(acct, "sessions", "2026-10-09_oldsession");
+  await fs.mkdir(sessDir, { recursive: true });
+  await fs.copyFile(FIXTURE, path.join(sessDir, "messages.jsonl"));
+  const n = await core.seedSessions(home, acct);
+  assert.equal(n, 1);
+  const scanned = await core.scanSessions(home, acct);
+  assert.ok(scanned.every((r) => !r.fresh), "watch must not learn pre-install sessions");
+  // a grown file IS learned (simulates new work appended after install)
+  const raw = await fs.readFile(path.join(sessDir, "messages.jsonl"), "utf8");
+  await fs.writeFile(path.join(sessDir, "messages.jsonl"), raw + raw.split("\n")[1] + "\n");
+  const scanned2 = await core.scanSessions(home, acct);
+  assert.ok(scanned2.some((r) => r.fresh), "grown session was not picked up");
+});
+
 test("sanitize helpers", () => {
   assert.equal(core.sanitizeValue("a@b.com"), "[redacted]");
   assert.equal(core.sanitizeValue("call 010-1234-5678"), "call [redacted]");

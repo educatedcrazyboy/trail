@@ -93,11 +93,13 @@ export async function main(argv = process.argv.slice(2)) {
         await fs.mkdir(path.dirname(dest), { recursive: true });
         await fs.rm(dest, { recursive: true, force: true });
         await fs.cp(srcSkill, dest, { recursive: true });
+        const seeded = await core.seedSessions(home, root);
         console.log(`Trail installed.
   state:  ${home}
   config: ${path.join(home, "config.json")}
   skill:  ${dest}
   learns from Aside sessions under: ${path.join(root, "sessions")}
+  existing sessions marked seen (${seeded}) — Trail learns from NEW work only
 
 Nothing else to do — use Aside normally and Trail learns from completed work.
 Manage with: trail list | show <host> | forget <host> | off | on | report`);
