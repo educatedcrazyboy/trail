@@ -141,9 +141,9 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
         }
         console.log(`watching ${path.join(accountRoot, "sessions")} every ${interval / 1000}s — Ctrl+C to stop`);
         await tick();
-        const timer = setInterval(() => tick().catch((e) => console.error("watch error:", e.message)), interval);
-        timer.unref?.();
-        // keep alive
+        // the interval itself keeps the event loop alive — do NOT unref it
+        // (unref + pending top-level await makes node exit 13 "unsettled await").
+        setInterval(() => tick().catch((e) => console.error("watch error:", e.message)), interval);
         await new Promise(() => {});
         return 0;
       }
