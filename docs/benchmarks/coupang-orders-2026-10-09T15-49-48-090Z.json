@@ -1,0 +1,33 @@
+{
+  "task": "coupang-orders",
+  "host": "www.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "qvLJDHrViZ9Ptfcu",
+      "tokens": 0,
+      "replCalls": 2,
+      "wallMs": 66094,
+      "done": true,
+      "tail": "- 홈스타 맥스 세면대 배수관 클리너 230ml (5,220원, 2개) + 이즈앤트리 참마 클렌저 밀크 220ml (13,900원, 1개)  조회만 하고 아무것도 주문·변경·취소하지 않았고, 탭은 닫았어.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "IR0jADMxhiNyd5F5",
+      "tokens": 0,
+      "replCalls": 2,
+      "wallMs": 106225,
+      "done": true,
+      "tail": "같은 날 함께 주문된 다른 건들도 전부 배송완료(10/6 도착) 상태입니다: 리브러쉬 티트리 100배 수면가글 농축 가글액 50ml (17,950원), 홈스타 맥스 세면대 배수관 클리너 230ml 2개 + 이즈앤트리 참마 클렌저 밀크 220ml (5,220원 / 13,900원).  조회만 했고 주문·변경·취소는 하지 않았으며, 열었던 탭은 모두 닫았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "EvwM0FI8QHCPvs7s",
+      "tokens": 0,
+      "replCalls": 4,
+      "wallMs": 151669,
+      "done": true,
+      "tail": "- **배송 상태**: 배송완료 — 10/6(화) 도착  참고로 같은 날(10/5)에 주문이 하나 더 있어: 홈스타 맥스 세면대 배수관 클리너 (2개) + 이즈앤트리 참마 클렌저 밀크 (1개), 이것도 배송완료 10/6 도착.\u001b[0m"
+    }
+  ]
+}
