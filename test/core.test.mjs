@@ -131,3 +131,25 @@ test("sanitize helpers", () => {
   );
   assert.equal(core.siteSlug("127.0.0.1:8769"), "127-0-0-1-8769");
 });
+
+test("Aside memory bridge writes a marked index block + site file", async () => {
+  const home = await tmp();
+  const acct = path.join(home, "acct");
+  await fs.mkdir(path.join(acct, "memory"), { recursive: true });
+  await fs.writeFile(path.join(acct, "memory", "MEMORY.md"), "# user notes\nkeep me\n");
+  await core.saveConfig(home, { enabled: true, emit: true, accountRoot: acct });
+  await core.ingestFile(home, FIXTURE, { force: true });
+  const md = await fs.readFile(path.join(acct, "memory", "MEMORY.md"), "utf8");
+  assert.match(md, /keep me/);
+  assert.match(md, /TRAIL-BEGIN/);
+  assert.match(md, /memory\/sites\/trail-127-0-0-1-8769\.md/);
+  const site = await fs.readFile(path.join(acct, "memory", "sites", "trail-127-0-0-1-8769.md"), "utf8");
+  assert.match(site, /shortcut: open \/compose/);
+  assert.ok(!site.includes("FIRST-RUN"));
+  // off strips the block but keeps user content
+  await core.disableAsideMemory(acct);
+  const md2 = await fs.readFile(path.join(acct, "memory", "MEMORY.md"), "utf8");
+  assert.match(md2, /keep me/);
+  assert.ok(!md2.includes("TRAIL-BEGIN"));
+  await assert.rejects(fs.access(path.join(acct, "memory", "sites", "trail-127-0-0-1-8769.md")));
+});

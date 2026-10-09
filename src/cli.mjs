@@ -161,6 +161,7 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
           console.log(`emitted ${mem.host} -> ${p}`);
           n++;
         }
+        await core.syncAsideMemory(home, accountRoot);
         console.log(`${n} skill(s) up to date`);
         return 0;
       }
@@ -220,7 +221,8 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
         const skDir = core.skillDir(accountRoot, host);
         await fs.rm(siteDir, { recursive: true, force: true });
         await fs.rm(skDir, { recursive: true, force: true });
-        console.log(`forgot ${host}: removed ${siteDir} and ${skDir}`);
+        await core.unsyncAsideMemory(home, accountRoot, host);
+        console.log(`forgot ${host}: removed site memory, emitted skill, and the Aside-memory index entry`);
         return 0;
       }
 
@@ -229,7 +231,9 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
         cfg.enabled = false;
         cfg.emit = false;
         await core.saveConfig(home, cfg);
-        console.log("Trail learning paused: sessions are still readable but no new memory is distilled and no skills are emitted. Re-enable with: trail on");
+        const accountRoot = await resolveAccountRoot(args, home);
+        await core.disableAsideMemory(accountRoot);
+        console.log("Trail learning paused and its site index removed from Aside memory (data kept in ~/.trail). Re-enable with: trail on");
         return 0;
       }
 
@@ -238,7 +242,9 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
         cfg.enabled = true;
         cfg.emit = true;
         await core.saveConfig(home, cfg);
-        console.log("Trail learning re-enabled.");
+        const accountRoot = await resolveAccountRoot(args, home);
+        await core.syncAsideMemory(home, accountRoot);
+        console.log("Trail learning re-enabled; site index restored to Aside memory.");
         return 0;
       }
 
