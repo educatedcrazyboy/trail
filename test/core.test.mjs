@@ -153,3 +153,11 @@ test("Aside memory bridge writes a marked index block + site file", async () => 
   assert.ok(!md2.includes("TRAIL-BEGIN"));
   await assert.rejects(fs.access(path.join(acct, "memory", "sites", "trail-127-0-0-1-8769.md")));
 });
+
+test("launchd plist is well-formed and status runs", async () => {
+  const home = await tmp();
+  const plist = core.buildLaunchdPlist(home);
+  assert.match(plist, /com\.trail\.watch/);
+  assert.match(plist, /RunAtLoad<\/key><true\/>/);
+  assert.match(plist, /bin\/trail\.js/);
+});

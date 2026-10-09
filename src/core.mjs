@@ -637,6 +637,61 @@ export async function disableAsideMemory(accountRoot) {
   await fs.writeFile(memFile, cur.replace(re, "\n"));
 }
 
+// ---------- background daemon (launchd on macOS, nohup elsewhere) ----------
+
+export const LAUNCHD_LABEL = "com.trail.watch";
+export function launchdPlistPath() {
+  return path.join(
+    os.homedir(),
+    "Library",
+    "LaunchAgents",
+    `${LAUNCHD_LABEL}.plist`
+  );
+}
+
+export function buildLaunchdPlist(home) {
+  const cli = path.resolve(
+    path.dirname(new URL(import.meta.url).pathname),
+    "..",
+    "bin",
+    "trail.js"
+  );
+  const log = path.join(home, "watch.log");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>${LAUNCHD_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${process.execPath}</string>
+    <string>${cli}</string>
+    <string>watch</string>
+    <string>--home</string><string>${home}</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>${log}</string>
+  <key>StandardErrorPath</key><string>${log}</string>
+</dict>
+</plist>
+`;
+}
+
+export async function daemonStatus(home) {
+  const plist = launchdPlistPath();
+  const installed = await fs.access(plist).then(() => true, () => false);
+  let pid = null;
+  try {
+    const st = await loadJson(path.join(home, "watch.pid"));
+    if (st?.pid) {
+      process.kill(st.pid, 0);
+      pid = st.pid;
+    }
+  } catch {}
+  return { installed, pid, plist };
+}
+
 // ---------- ingest + scan ----------
 
 export async function ingestFile(home, file, opts = {}) {

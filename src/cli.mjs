@@ -1,7 +1,12 @@
 // Trail CLI: thin dispatch over src/core.mjs. No dependencies.
+import { spawn, execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import * as core from "./core.mjs";
+
+const execFileP = promisify(execFile);
 
 const USAGE = `trail — automatic browsing-experience memory for Aside
 
@@ -14,6 +19,10 @@ Commands:
   watch [--once] [--interval S]
                             Watch Aside sessions and learn continuously
                             (default interval 30s; --once scans a single pass)
+  start                     Run watch in the background permanently
+                            (launchd on macOS: survives logout, auto-restarts)
+  stop                      Stop the background watcher
+  status                    Show whether the background watcher is running
   distill                   Re-emit site skills from saved memory
   list                      List sites Trail has learned
   show <host>               Print a site's memory JSON
@@ -145,6 +154,91 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
         // (unref + pending top-level await makes node exit 13 "unsettled await").
         setInterval(() => tick().catch((e) => console.error("watch error:", e.message)), interval);
         await new Promise(() => {});
+        return 0;
+      }
+
+      case "start": {
+        const st = await core.daemonStatus(home);
+        if (st.pid) {
+          console.log(`Trail watcher already running (pid ${st.pid}).`);
+          return 0;
+        }
+        if (os.platform() === "darwin") {
+          const plistPath = core.launchdPlistPath();
+          await fs.mkdir(path.dirname(plistPath), { recursive: true });
+          await fs.writeFile(plistPath, core.buildLaunchdPlist(home));
+          try {
+            await execFileP("launchctl", ["bootout", `gui/${process.getuid()}`, plistPath]);
+          } catch {}
+          await execFileP("launchctl", [
+            "bootstrap",
+            `gui/${process.getuid()}`,
+            plistPath,
+          ]);
+          console.log(`Trail watcher started via launchd — survives terminal close and login.`);
+          console.log(`  plist: ${plistPath}`);
+          console.log(`  log:   ${path.join(home, "watch.log")}`);
+          console.log(`  stop:  node bin/trail.js stop`);
+          return 0;
+        }
+        // non-macOS: detached nohup-style child
+        const cli = path.resolve(
+          path.dirname(new URL(import.meta.url).pathname),
+          "..",
+          "bin",
+          "trail.js"
+        );
+        const logFd = await fs.open(path.join(home, "watch.log"), "a");
+        const child = spawn(
+          process.execPath,
+          [cli, "watch", "--home", home],
+          { detached: true, stdio: ["ignore", logFd.fd, logFd.fd] }
+        );
+        child.unref();
+        await fs.writeFile(
+          path.join(home, "watch.pid"),
+          JSON.stringify({ pid: child.pid, at: new Date().toISOString() })
+        );
+        await logFd.close();
+        console.log(`Trail watcher started detached (pid ${child.pid}) — survives terminal close.`);
+        console.log(`  log: ${path.join(home, "watch.log")}  stop: node bin/trail.js stop`);
+        return 0;
+      }
+
+      case "stop": {
+        const st = await core.daemonStatus(home);
+        if (os.platform() === "darwin" && st.installed) {
+          try {
+            await execFileP("launchctl", [
+              "bootout",
+              `gui/${process.getuid()}`,
+              st.plist,
+            ]);
+          } catch {}
+          await fs.rm(st.plist, { force: true });
+          console.log("Trail watcher stopped and launchd entry removed.");
+          return 0;
+        }
+        if (st.pid) {
+          try {
+            process.kill(st.pid, "SIGTERM");
+          } catch {}
+          await fs.rm(path.join(home, "watch.pid"), { force: true });
+          console.log(`Trail watcher (pid ${st.pid}) stopped.`);
+          return 0;
+        }
+        console.log("Trail watcher is not running.");
+        return 0;
+      }
+
+      case "status": {
+        const st = await core.daemonStatus(home);
+        const cfg = await core.loadConfig(home);
+        console.log(`learning: ${cfg.enabled !== false ? "on" : "paused (trail off)"}`);
+        console.log(
+          `watcher:  ${st.pid ? `running (pid ${st.pid})` : st.installed ? "installed in launchd" : "not running"}`
+        );
+        console.log(`log:      ${path.join(home, "watch.log")}`);
         return 0;
       }
 

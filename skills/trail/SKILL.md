@@ -15,6 +15,7 @@ Run the user's installed Trail CLI (try `trail` first; fall back to `node <path-
 - `trail forget <host>` — delete one site's memory and its generated skill (confirm with the user first)
 - `trail off` — pause learning (data is kept, nothing new is distilled or emitted)
 - `trail on` — resume learning
+- `trail start` / `trail stop` / `trail status` — manage the always-on background watcher
 
 ## Rules
 

@@ -39,12 +39,17 @@ node bin/trail.js init
 `init`이 하는 일: `~/.trail` 생성, 설정 저장, Aside에 `trail` 컨트롤러
 스킬 설치. 그 이후 평소처럼 Aside를 쓰면 된다.
 
-백그라운드 수집까지 켜고 싶다면:
+백그라운드 수집을 영구히 켜려면 (한 번 실행하면 로그아웃·재부팅 후에도
+자동으로 돌아간다, macOS launchd 사용):
 
 ```sh
-node bin/trail.js watch &      # 세션 폴더를 주기적으로 스캔
-# 또는 작업 후 수동으로:
-node bin/trail.js watch --once
+node bin/trail.js start    # 켜기 — 터미널을 닫아도 계속 동작
+node bin/trail.js status   # 상태 확인
+node bin/trail.js stop     # 끄기
+
+# 또는 일시적으로만:
+node bin/trail.js watch &          # 이 터미널 세션 안에서만
+node bin/trail.js watch --once     # 한 번만 스캔
 ```
 
 ## 일상적인 사용
@@ -106,6 +111,7 @@ agent's session transcripts, distills per-site "how this site is used" memory
 (pages, routes, verified shortcuts — never the values you typed), and publishes
 it back as auto-loading Aside skills plus a marked index block at the top
 of Aside's own memory/MEMORY.md (the channel exec agents actually read).
-Install once (`node bin/trail.js init`),
+Install once (`node bin/trail.js init`), optionally make recording
+always-on with `node bin/trail.js start` (launchd on macOS),
 then use Aside as usual. Everything stays on your machine; `trail forget`,
 `trail off` give you control. MIT licensed.
