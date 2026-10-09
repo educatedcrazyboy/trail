@@ -49,6 +49,13 @@ export function parseSnapshotText(text) {
   if (links.length) page.links = links;
   if (textboxes.length) page.textboxes = textboxes;
   if (buttons.length) page.buttons = buttons;
+  // ref -> durable {role,label} so leadsTo edges can name the control without
+  // pinning an ephemeral eN
+  const elementRefs = {};
+  for (const m of text.matchAll(/- (link|button|textbox) "([^"]+)" \[ref=(e\d+)\]/g)) {
+    elementRefs[m[3]] = { role: m[1], label: m[2] };
+  }
+  page.elementRefs = elementRefs;
   return page.url || page.title ? page : null;
 }
 
@@ -108,23 +115,73 @@ export function sanitizeUrl(u) {
   try {
     const url = new URL(u);
     const keys = [...url.searchParams.keys()];
-    for (const k of keys) {
-      url.searchParams.set(k, "${" + k + "}");
+    const normPath = normalizePathname(url.pathname);
+    if (keys.length) {
+      // rebuild manually: url.searchParams re-encodes braces in values
+      const qs = keys.map((k) => k + "=${" + k + "}").join("&");
+      return url.origin + normPath + "?" + qs + (url.hash || "");
     }
-    let out = url.toString();
-    if (!keys.length && url.search) out = url.origin + url.pathname;
-    return out;
+    return url.origin + normPath + (url.hash || "");
   } catch {
     return u;
   }
 }
 
+// raw pathname — no normalization (identifier-safe reads like title matching)
 export function urlPathOf(u) {
   try {
     return new URL(u).pathname;
   } catch {
     return null;
   }
+}
+
+// per-entity path segments → {name}: order/17103500095423 -> order/{orderId}.
+// Only runs on the STORED path (never re-parsed through new URL — braces would
+// percent-encode), so route/page keys are stable across different entities.
+const SEG_LITERAL_RULES = [
+  (s) => s.includes("%"), // percent-encoded slug
+  (s) => !/\d/.test(s), // pure word: order, list, en-US
+  (s) => /^\d{1,4}$/.test(s), // year/page: 2024, 10, 2
+  (s) => /^v\d+(\.\d+)*$/i.test(s), // api version: v2, v1.2
+  (s) => /^(19|20)\d{2}-?(0[1-9]|1[0-2])-?([0-2]\d|3[01])?$/.test(s), // 2024-10-09
+  (s) => /\.[a-zA-Z]{2,5}$/.test(s) && !/\d{5,}/.test(s), // file-like: index.html
+];
+function isParamSegment(s) {
+  if (SEG_LITERAL_RULES.some((rule) => rule(s))) return false;
+  return (
+    /\d{5,}/.test(s) || // long digit run: order ids
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) ||
+    /^[0-9a-f]{16,}$/i.test(s) || // hex token
+    (/^[A-Za-z0-9_-]{10,}$/.test(s) && /[A-Za-z]/.test(s) && /\d/.test(s)) // ASIN
+  );
+}
+function camelFrom(s) {
+  const c = s.replace(/[-_]+(.)/g, (_, ch) => ch.toUpperCase()).replace(/^(.)/, (ch) => ch.toLowerCase());
+  return /^[a-z][a-zA-Z0-9]*$/.test(c) ? c : null;
+}
+export function normalizePathname(pn) {
+  if (typeof pn !== "string") return pn;
+  const segs = pn.split("/");
+  let n = 0;
+  return segs
+    .map((s, i) => {
+      if (!isParamSegment(s)) return s;
+      for (let j = i - 1; j >= 0; j--) {
+        const prev = segs[j];
+        if (!prev || isParamSegment(prev)) continue;
+        const base = camelFrom(prev);
+        if (base) return "{" + base + "Id}";
+        break;
+      }
+      return "{id" + (++n > 1 ? n : "") + "}";
+    })
+    .join("/");
+}
+// routing form: normalized pathname used for pages/routes/shortcuts
+export function routePathOf(u) {
+  const p = urlPathOf(u);
+  return p ? normalizePathname(p) : null;
 }
 
 export function hostOf(u) {
@@ -227,7 +284,7 @@ export async function extractSession(file) {
 
       extracted.totals.replCalls++;
       const acts = parseReplCode(args.code || "");
-      for (const act of acts) {
+      for (const [i, act] of acts.entries()) {
         if (act.kind === "navigate") {
           const h = hostOf(act.url);
           if (h) currentHost = h;
@@ -238,19 +295,47 @@ export async function extractSession(file) {
           pushStep(currentHost, {
             kind: "navigate",
             url: sanitizeUrl(act.url),
-            urlPath: urlPathOf(act.url),
+            urlPath: routePathOf(act.url),
             failed,
           });
         } else if (act.kind === "click" || act.kind === "press" || act.kind === "selectOption") {
           // the result page of this call may live on ANOTHER host (a nav link
           // click www→mc): stamp the path only when it stayed in-host, else
-          // the source host "visits" a path that isn't its own.
+          // the source host "visits" a path that isn't its own. Cross-host
+          // landings become a leadsTo edge on the SOURCE site instead.
           const stepHost = currentHost || pageHost;
           const sameHost = !!(pageHost && pageHost === stepHost);
+          // last nav-causing act in this repl owns the result page (a trailing
+          // snapshot()/screenshot() doesn't change where we landed)
+          const NAV_ACTS = new Set(["navigate", "openTab", "click", "press", "selectOption", "fill", "type"]);
+          const isLastAct = !acts.slice(i + 1).some((a) => NAV_ACTS.has(a.kind));
+          const errHost = pageHost && /chromewebdata|^chrome\.|^edge\.|^devtools$|^about$/.test(pageHost);
+          const errPage = page?.url && /^(chrome-error:|edge-error:|about:blank)/.test(page.url);
+          const lead =
+            isLastAct && currentHost && pageHost && pageHost !== currentHost &&
+            !errHost && !errPage && page.url
+              ? { toHost: pageHost, toPath: routePathOf(page.url) }
+              : null;
+          // resolve an eN ref to a durable "role \"label\"" from the SOURCE
+          // host's last snapshot — refs die next snapshot.
+          let durable = null;
+          if (act.selector && /^e\d+$/.test(act.selector)) {
+            const lp = extracted.sites[currentHost]?.lastPage;
+            const hit = lp?.elementRefs?.[act.selector];
+            if (hit) durable = `${hit.role} "${sanitizeLabel(hit.label)}"`;
+          } else if (act.selector) durable = sanitizeLabel(act.selector) || null;
+          const fromPage =
+            [...(extracted.sites[currentHost]?.steps || [])]
+              .reverse()
+              .find((s) => !s.failed && (s.pageUrl || s.urlPath))
+              ?.pageUrl || null;
           pushStep(stepHost, {
             kind: act.kind,
             selector: act.selector,
-            pageUrl: sameHost ? urlPathOf(page.url) : null,
+            pageUrl: sameHost ? routePathOf(page.url) : null,
+            leadsTo: lead
+              ? { fromPage, selector: durable, toHost: lead.toHost, toPath: lead.toPath }
+              : undefined,
           });
         } else if (act.kind === "fill") {
           // resolve the field's label from the LAST seen page snapshot when the
@@ -262,7 +347,7 @@ export async function extractSession(file) {
             kind: "fill",
             selector: act.selector,
             fillField: field ? sanitizeValue(field) : null,
-            pageUrl: sameHost ? urlPathOf(page.url) : null,
+            pageUrl: sameHost ? routePathOf(page.url) : null,
             // value intentionally dropped
           });
           act._fillValue = true;
@@ -276,7 +361,7 @@ export async function extractSession(file) {
         if (h) {
           currentHost = h;
           const site = (extracted.sites[h] ??= { steps: [] });
-          const p = urlPathOf(page.url);
+          const p = routePathOf(page.url);
           const last = site.steps[site.steps.length - 1];
           if (last) {
             last.pageUrl = last.pageUrl ?? p;
@@ -377,9 +462,11 @@ export async function distillFlows(home, extracted) {
         sessions: [],
         pages: {},
         routes: [],
+        leadsTo: [],
         corrections: [],
         notes: [],
       };
+    mem.leadsTo ??= [];
     mem.updatedAt = nowIso();
     if (!mem.sessions.includes(extracted.sessionId))
       mem.sessions.push(extracted.sessionId);
@@ -387,6 +474,28 @@ export async function distillFlows(home, extracted) {
     // pages: record visits + elements
     const visit = [];
     for (const st of site.steps) {
+      // cross-host landing the click produced: record on the SOURCE site as
+      // a leadsTo edge — never as a route step (the target host owns it)
+      if (st.leadsTo && st.leadsTo.toHost && st.leadsTo.toHost !== host) {
+        const lt = st.leadsTo;
+        const key = `${lt.fromPage || ""}::${lt.selector || ""}::${lt.toHost}::${lt.toPath}`;
+        const ex = mem.leadsTo.find((e) => e.key === key);
+        if (ex) {
+          ex.seen++;
+          ex.lastSeen = nowIso();
+        } else {
+          mem.leadsTo.push({
+            key,
+            fromPage: lt.fromPage || null,
+            selector: lt.selector || null,
+            toHost: lt.toHost,
+            toPath: lt.toPath,
+            seen: 1,
+            lastSeen: nowIso(),
+            evidence: `session ${extracted.sessionId}`,
+          });
+        }
+      }
       if (st.failed) continue; // dead-end navigation — never a route step
       const p = st.urlPath || st.pageUrl;
       if (!p) continue;
@@ -398,7 +507,7 @@ export async function distillFlows(home, extracted) {
         if (st.pageHeading) pg.heading = st.pageHeading;
       }
       // merge element labels from the session's lastPage snapshots
-      if (site.lastPage && st.pageUrl === urlPathOf(site.lastPage.url)) {
+      if (site.lastPage && st.pageUrl === routePathOf(site.lastPage.url)) {
         const pg = (mem.pages[st.pageUrl] ??= { count: 0, elements: {} });
         pg.elements = pg.elements || {};
         for (const [k, arr] of Object.entries({
@@ -427,7 +536,10 @@ export async function distillFlows(home, extracted) {
       const preCompletion = endPath.startsWith("/done")
         ? visit.slice(0, -1)
         : visit;
-      const lastStable = preCompletion.length ? preCompletion[preCompletion.length - 1] : null;
+      // a parameterized path ({orderId}) is a template, not an openable URL —
+      // the shortcut is the last LITERAL path on the route
+      const literalSteps = preCompletion.filter((p) => !/[{}]/.test(p));
+      const lastStable = literalSteps.length ? literalSteps[literalSteps.length - 1] : null;
       const key = endPath.split("?")[0] + "::" + (site.lastPage?.heading || "");
       const existing = mem.routes.find((r) => r.key === key || samePath(r.steps, preCompletion));
       // label = the TASK page heading (last page before the completion page),
@@ -536,10 +648,34 @@ Read references/memory.md before browsing ${host}. Prefer the verified shortcut 
   lines.push("");
   lines.push("## Learned routes");
   lines.push("");
+  const isTemplate = (p) => /[{}]/.test(p || "");
+  const hintOf = (name) => {
+    const words = name.replace(/Id$/, "").replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+    return "the " + (words || name);
+  };
   for (const r of mem.routes) {
     lines.push(`- ${r.label}: ${r.steps.join(" -> ")}`);
-    if (r.shortcut) lines.push(`  - Shortcut: open ${origin}${r.shortcut} directly instead of walking the intermediate pages.`);
+    if (r.shortcut && !isTemplate(r.shortcut)) {
+      lines.push(`  - Shortcut: open ${origin}${r.shortcut} directly instead of walking the intermediate pages.`);
+    }
+    // parameterized paths are templates — never a Shortcut line, and never
+    // print the observed entity value (an agent would open it verbatim)
+    for (const step of r.steps) {
+      if (!isTemplate(step)) continue;
+      const holes = [...step.matchAll(/\{([a-zA-Z0-9_]+)\}/g)].map((m) => m[1]);
+      const subs = holes.map((h) => `Substitute {${h}} with ${hintOf(h)}`).join("; ");
+      lines.push(`  - Template: do not open as written. ${subs}, then open only the filled URL. Pattern: ${origin}${step}. Never open a URL that still contains "{" or "}".`);
+    }
     lines.push(`  - Seen ${r.seen}x, verified ${r.success}x, last ${r.lastSeen}`);
+  }
+  if (mem.leadsTo?.length) {
+    lines.push("");
+    lines.push("## Cross-site links");
+    for (const e of mem.leadsTo.slice(0, 8)) {
+      const roleLabel = e.selector?.match(/^(link|button|textbox) "(.+)"$/);
+      const src = roleLabel ? `${roleLabel[2]} ${roleLabel[1]}` : e.selector || `page ${e.fromPage || "/"}`;
+      lines.push(`- ${src} leads to ${e.toHost}${e.toPath}.`);
+    }
   }
   if (mem.corrections.length) {
     lines.push("");
@@ -552,6 +688,7 @@ Read references/memory.md before browsing ${host}. Prefer the verified shortcut 
   lines.push("- The current request's values (recipient, text, quantity, options) — never reuse remembered ones.");
   lines.push("- Element refs and exact labels from a live snapshot — memory describes pages, it does not pin selectors.");
   lines.push("- If a shortcut leads to an unexpected page (404, login wall, changed layout), fall back to normal navigation.");
+  lines.push("- A \"{\" or \"}\" in a path is a placeholder, not an address. Substitute the named value, then open the result. If you do not have the value, open the stable page that leads there and read it on the page.");
   lines.push("");
   lines.push(`Memory provenance marker: ${marker}.`);
   lines.push("");
@@ -584,10 +721,10 @@ export async function syncAsideMemory(home, accountRoot) {
   for (const d of dirs) {
     if (!d.isDirectory()) continue;
     const mem = await loadJson(path.join(sitesDir, d.name, "memory.json"));
-    if (!mem?.host || !mem.routes?.length) continue;
+    if (!mem?.host || (!mem.routes?.length && !mem.leadsTo?.length)) continue;
     const title =
-      Object.values(mem.pages).find((p) => p.title)?.title || mem.host;
-    const labels = mem.routes.map((r) => r.label).join(", ");
+      Object.values(mem.pages || {}).find((p) => p.title)?.title || mem.host;
+    const labels = (mem.routes || []).map((r) => r.label).join(", ");
     // per-site detail file in Aside's own memory tree
     const siteFile = path.join(memDir, "sites", `trail-${siteSlug(mem.host)}.md`);
     await fs.mkdir(path.dirname(siteFile), { recursive: true });
@@ -598,22 +735,47 @@ export async function syncAsideMemory(home, accountRoot) {
       `Full guide: skills/user/trail-${siteSlug(mem.host)}/references/memory.md`,
       "",
       "## Learned routes",
-      ...mem.routes.map(
+      ...(mem.routes || []).map(
         (r) =>
           `- ${r.label}: ${r.steps.join(" -> ")}` +
-          (r.shortcut ? ` — shortcut: open ${r.shortcut} directly, then verify the page.` : "")
+          (r.shortcut && !/[{}]/.test(r.shortcut) ? ` — shortcut: open ${r.shortcut} directly, then verify the page.` : "")
       ),
+      ...(mem.leadsTo?.length
+        ? [
+            "",
+            "## Cross-site links",
+            ...mem.leadsTo.slice(0, 8).map((e) => {
+              const m = e.selector?.match(/^(link|button|textbox) "(.+)"$/);
+              const src = m ? `${m[2]} ${m[1]}` : e.selector || `page ${e.fromPage || "/"}`;
+              return `- ${src} leads to ${e.toHost}${e.toPath}.`;
+            }),
+          ]
+        : []),
       "",
       "Rules: verify each learned step against the live page; request-time values are never in memory; if a path fails, explore normally and the correction is recorded on next ingest.",
       "",
     ].join("\n");
     await fs.writeFile(siteFile, body);
+    // never emit a template as an openable Shortcut — only literal paths
+    const literalShortcuts = (mem.routes || []).filter(
+      (r) => r.shortcut && !/[{}]/.test(r.shortcut)
+    );
+    const hasTemplate = (mem.routes || []).some((r) =>
+      r.steps.some((s) => /[{}]/.test(s))
+    );
+    const leads = (mem.leadsTo || []).slice(0, 3).map((e) => {
+      const m = e.selector?.match(/^(link|button|textbox) "(.+)"$/);
+      return `${m ? m[2] : e.selector || "page " + (e.fromPage || "/")} → ${e.toHost}${e.toPath}`;
+    });
     entries.push(
       `- ${title} (${mem.host}): ${labels}.` +
-        mem.routes
-          .filter((r) => r.shortcut)
+        literalShortcuts
           .map((r) => ` Shortcut: open http://${mem.host}${r.shortcut} directly`)
           .join("") +
+        (hasTemplate
+          ? ` Never open a URL that still contains "{" or "}" — substitute the named value first.`
+          : "") +
+        (leads.length ? ` Cross-site: ${leads.join("; ")}.` : "") +
         ` Details: memory/sites/trail-${siteSlug(mem.host)}.md`
     );
   }

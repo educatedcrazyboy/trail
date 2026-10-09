@@ -125,9 +125,25 @@ test("seedSessions baselines existing sessions so watch skips them", async () =>
 test("sanitize helpers", () => {
   assert.equal(core.sanitizeValue("a@b.com"), "[redacted]");
   assert.equal(core.sanitizeValue("call 010-1234-5678"), "call [redacted]");
+  // query values parameterize to literal ${key} — emit converts to {key};
+  // braces must NOT percent-encode or the placeholder is lost
   assert.equal(
     core.sanitizeUrl("http://x/done?note=secret&ok=1"),
-    "http://x/done?note=%24%7Bnote%7D&ok=%24%7Bok%7D"
+    "http://x/done?note=${note}&ok=${ok}"
+  );
+  // path segments normalize to {name}: order ids collapse, literals survive
+  assert.equal(
+    core.routePathOf("http://m.coupang.com/ssr/desktop/order/17103500095423"),
+    "/ssr/desktop/order/{orderId}"
+  );
+  assert.equal(
+    core.routePathOf("http://m.coupang.com/ssr/desktop/order/list"),
+    "/ssr/desktop/order/list"
+  );
+  assert.equal(core.routePathOf("http://x/en/blog/2024"), "/en/blog/2024");
+  assert.equal(
+    core.routePathOf("http://x/api/v2/users/1047293847"),
+    "/api/v2/users/{usersId}"
   );
   assert.equal(core.siteSlug("127.0.0.1:8769"), "127-0-0-1-8769");
 });
