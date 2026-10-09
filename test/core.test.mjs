@@ -170,7 +170,8 @@ test("a navigate that lands on chrome-error teaches no route step", async () => 
     { role: "turn-lifecycle", event: "started", turnId: "t1", timestamp: 1 },
     { role: "user", content: [{ type: "text", text: "go to the orders page" }], timestamp: 2 },
     { role: "assistant", content: [{ type: "toolCall", id: "c1", name: "repl", arguments: { code: "const p = await openTab('http://demo.test/dead/path'); const s = await snapshot(p);" } }] },
-    { role: "toolResult", content: [{ type: "text", text: '✔︎ Opened a new tab [url=chrome-error://chromewebdata/] - title: "demo.test"' }] },
+    // real Aside emits the error url in parens, not [url=…] — cover both
+    { role: "toolResult", content: [{ type: "text", text: '✔︎ Opened a new tab and set it active: tabs[0], page → demo.test (chrome-error://chromewebdata/)' }] },
     { role: "assistant", content: [{ type: "toolCall", id: "c2", name: "repl", arguments: { code: "const p2 = await openTab('http://demo.test/orders'); const s2 = await snapshot(p2);" } }] },
     { role: "toolResult", content: [{ type: "text", text: '✔︎ Opened a new tab, page → Orders [url=http://demo.test/orders] - title: "Orders" - heading "주문내역"' }] },
     { role: "assistant", content: [{ type: "text", text: "done" }] },

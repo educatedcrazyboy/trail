@@ -1,0 +1,33 @@
+{
+  "task": "coupang-tracking",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "KIBmeWRCAh3rV6M1",
+      "tokens": 118241,
+      "replCalls": 12,
+      "wallMs": 218748,
+      "done": true,
+      "tail": "- **운송장 번호:** 아직 없음  상태가 **상품준비중**이라 발송 전이고, 배송 조회 페이지의 송장번호 칸도 비어 있습니다(예정 도착: 내일 일요일 새벽 7시 전). 출고되면 송장번호가 채워집니다. 주문·변경·취소·반품 신청은 하지 않았고, 새로 연 탭 하나만 사용했습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "1pjW0yjTS3jqKXij",
+      "tokens": 110670,
+      "replCalls": 8,
+      "wallMs": 82657,
+      "done": true,
+      "tail": "- **송장번호**: 아직 미부여 — 주문이 **상품준비중**이라 배송조회 페이지의 송장번호 칸이 비어 있습니다 (URL의 invoiceNumber도 빈값).  출고 후 배송시작 상태가 되면 송장번호가 생깁니다. 주문·변경·취소 등은 건드리지 않았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "GVyOGmcnFfuKEpCa",
+      "tokens": 58113,
+      "replCalls": 12,
+      "wallMs": 93734,
+      "done": true,
+      "tail": "- **송장번호**: 미부여 — 아직 `상품준비중`이라 배송 조회의 송장번호 칸이 비어 있습니다.  출고 후 운송장번호가 발급되면 같은 화면에 표시됩니다. (주문/취소/반품 등은 건드리지 않았습니다.)\u001b[0m"
+    }
+  ]
+}

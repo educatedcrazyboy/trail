@@ -24,6 +24,8 @@ if (!taskFile) {
 }
 const task = JSON.parse(await fs.readFile(taskFile, "utf8"));
 const HOST = task.host;
+// all hosts this task can touch — fairness: cold means ZERO memory anywhere
+const HOSTS = Array.isArray(task.hosts) && task.hosts.length ? task.hosts : [HOST];
 
 function sh(cmd, args) {
   const r = spawnSync(cmd, args, { encoding: "utf8" });
@@ -99,16 +101,26 @@ if (task.demoSite) {
 }
 
 const results = [];
+// fairness: the launchd watcher must not ingest benchmark sessions mid-run
+// (it would resurrect memory between runs). Stop it; restore in finally.
+const wasWatching = !!trail("status").match(/watcher:.*running|running.*pid/i);
+if (wasWatching) {
+  trail("stop");
+  console.log("watcher stopped for the bench — restored at the end");
+}
 try {
-  // A. cold — wipe any memory of this site first
-  trail("forget", HOST);
-  console.log("[A] cold run (no memory)…");
+  // A. cold — strip the whole Trail index + forget every host this task
+  // touches, so the agent starts with literally zero learned context.
+  trail("off");
+  for (const h of HOSTS) trail("forget", h);
+  console.log("[A] cold run (no memory, no index)…");
   results.push({ scenario: "cold", ...(await runTask()) });
   console.log(`  -> ${results[0].tail}`);
 
   // learn run A, then rerun with memory ON
   console.log("[A] ingesting so Trail learns…");
   trail("watch", "--once");
+  trail("on"); // re-emit the index so run B actually sees it
   console.log("[B] rerun, trail on…");
   results.push({ scenario: "trail-on", ...(await runTask()) });
   console.log(`  -> ${results[1].tail}`);
@@ -120,6 +132,7 @@ try {
   console.log(`  -> ${results[2].tail}`);
 } finally {
   trail("on");
+  if (wasWatching) trail("start");
   server?.kill("SIGTERM");
 }
 

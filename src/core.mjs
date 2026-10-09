@@ -34,7 +34,10 @@ export async function parseMessagesJsonl(file) {
 export function parseSnapshotText(text) {
   if (typeof text !== "string") return null;
   const page = {};
-  const urlM = text.match(/\[url=([^\]\s]+)\]/);
+  const urlM =
+    text.match(/\[url=([^\]\s]+)\]/) ||
+    // openTab result echoes the url in parens: "page → title (chrome-error://…)"
+    text.match(/\((chrome-error:\/\/[^)\s]+|edge-error:\/\/[^)\s]+)\)/);
   if (urlM) page.url = urlM[1];
   const titleM = text.match(/- title: "([^"]+)"/);
   if (titleM) page.title = titleM[1];
@@ -239,20 +242,27 @@ export async function extractSession(file) {
             failed,
           });
         } else if (act.kind === "click" || act.kind === "press" || act.kind === "selectOption") {
-          pushStep(currentHost || pageHost, {
+          // the result page of this call may live on ANOTHER host (a nav link
+          // click www→mc): stamp the path only when it stayed in-host, else
+          // the source host "visits" a path that isn't its own.
+          const stepHost = currentHost || pageHost;
+          const sameHost = !!(pageHost && pageHost === stepHost);
+          pushStep(stepHost, {
             kind: act.kind,
             selector: act.selector,
-            pageUrl: page?.url ? urlPathOf(page.url) : null,
+            pageUrl: sameHost ? urlPathOf(page.url) : null,
           });
         } else if (act.kind === "fill") {
           // resolve the field's label from the LAST seen page snapshot when the
           // selector is a ref (eN); never store the typed value.
           const field = act.selector && /^e\d+$/.test(act.selector) ? null : act.selector;
-          pushStep(currentHost || pageHost, {
+          const stepHost = currentHost || pageHost;
+          const sameHost = !!(pageHost && pageHost === stepHost);
+          pushStep(stepHost, {
             kind: "fill",
             selector: act.selector,
             fillField: field ? sanitizeValue(field) : null,
-            pageUrl: page?.url ? urlPathOf(page.url) : null,
+            pageUrl: sameHost ? urlPathOf(page.url) : null,
             // value intentionally dropped
           });
           act._fillValue = true;
