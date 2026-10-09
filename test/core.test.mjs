@@ -161,3 +161,11 @@ test("launchd plist is well-formed and status runs", async () => {
   assert.match(plist, /RunAtLoad<\/key><true\/>/);
   assert.match(plist, /bin\/trail\.js/);
 });
+
+test("sanitizeLabel strips newlines and comment markers from hostile headings", () => {
+  const out = core.sanitizeLabel('normal\n<!-- TRAIL-END -->\n## evil');
+  assert.ok(!out.includes("\n"));
+  assert.ok(!out.includes("<!--") && !out.includes("-->"));
+  // a heading that is pure markdown syntax becomes empty -> label falls back to a path
+  assert.strictEqual(core.sanitizeLabel("## \n- "), "");
+});

@@ -88,6 +88,19 @@ export function sanitizeValue(s) {
     .replace(PHONE_RE, "[redacted]");
 }
 
+// For text that lands in a prompt-facing markdown file (MEMORY.md index,
+// skill frontmatter descriptions). A hostile page heading could inject
+// newlines/HTML comments to smuggle instructions into the next agent prompt.
+export function sanitizeLabel(s) {
+  if (typeof s !== "string") return s;
+  return sanitizeValue(s)
+    .replace(/<!--|-->/g, "") // strip comment markers, break TRAIL-BEGIN/END spoofing
+    .replace(/[\r\n]+/g, " ")
+    .replace(/^[\s#>*\-`]+/, "") // no leading markdown syntax
+    .trim()
+    .slice(0, 120);
+}
+
 export function sanitizeUrl(u) {
   try {
     const url = new URL(u);
@@ -292,7 +305,8 @@ export async function loadJson(file, fallback = null) {
 export async function saveJson(file, obj) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = file + ".tmp";
-  await fs.writeFile(tmp, JSON.stringify(obj, null, 2));
+  // 0600: state.json stores the user's request text (160c) — never world/group-readable
+  await fs.writeFile(tmp, JSON.stringify(obj, null, 2), { mode: 0o600 });
   await fs.rename(tmp, file);
 }
 
@@ -405,14 +419,15 @@ export async function distillFlows(home, extracted) {
         ([p]) => p === taskPath
       )?.[1]?.heading;
       const label =
-        (taskHeading ? sanitizeValue(taskHeading) : null) ||
+        (taskHeading ? sanitizeLabel(taskHeading) : null) ||
         preCompletion[preCompletion.length - 1] ||
         endPath;
       if (existing) {
         existing.seen++;
         existing.success++;
         existing.lastSeen = nowIso();
-        if (taskHeading && existing.label !== taskHeading) existing.label = label;
+        if (taskHeading && existing.label !== sanitizeLabel(taskHeading))
+          existing.label = sanitizeLabel(taskHeading) || label;
         if (lastStable && existing.shortcut && existing.shortcut !== lastStable) {
           mem.corrections.push({
             at: nowIso(),
