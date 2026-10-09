@@ -624,7 +624,7 @@ description: "Use saved navigation experience for ${escapeYaml(labels || "record
 autoInject:
   url: ["${host}"]
 ---
-Read references/memory.md before browsing ${host}. Prefer the verified shortcut if it still works on the page you see now; otherwise use normal navigation and verify each result against the page. Treat every requested value (recipient, message text, quantity, option, price) as fresh input from the current request — never reuse remembered values or old element refs. Verify completion from what the page shows, not from memory. In your final answer, mention the memory provenance marker only if you actually read and used the memory.
+Read references/memory.md before browsing ${host}. Prefer the verified shortcut if it still works on the page you see now; otherwise use normal navigation and verify each result against the page. A Template line is not a shortcut: never open a URL that still contains "{" or "}". Treat every requested value (recipient, message text, quantity, option, price) as fresh input from the current request — never reuse remembered values or old element refs. Verify completion from what the page shows, not from memory. In your final answer, mention the memory provenance marker only if you actually read and used the memory.
 `;
 
   const lines = [];
