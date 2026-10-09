@@ -1,0 +1,24 @@
+{
+  "name": "trail",
+  "version": "0.1.0",
+  "description": "Automatic browsing-experience memory for the Aside agent: it learns how you use websites and skips re-exploration next time.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "trail": "bin/trail.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "test-site.mjs",
+    "docs"
+  ],
+  "dependencies": {}
+}
