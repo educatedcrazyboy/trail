@@ -162,6 +162,31 @@ test("launchd plist is well-formed and status runs", async () => {
   assert.match(plist, /bin\/trail\.js/);
 });
 
+test("a navigate that lands on chrome-error teaches no route step", async () => {
+  const home = await tmp();
+  const acct = path.join(home, "acct");
+  await core.saveConfig(home, { enabled: true, emit: false, accountRoot: acct });
+  const dead = [
+    { role: "turn-lifecycle", event: "started", turnId: "t1", timestamp: 1 },
+    { role: "user", content: [{ type: "text", text: "go to the orders page" }], timestamp: 2 },
+    { role: "assistant", content: [{ type: "toolCall", id: "c1", name: "repl", arguments: { code: "const p = await openTab('http://demo.test/dead/path'); const s = await snapshot(p);" } }] },
+    { role: "toolResult", content: [{ type: "text", text: '✔︎ Opened a new tab [url=chrome-error://chromewebdata/] - title: "demo.test"' }] },
+    { role: "assistant", content: [{ type: "toolCall", id: "c2", name: "repl", arguments: { code: "const p2 = await openTab('http://demo.test/orders'); const s2 = await snapshot(p2);" } }] },
+    { role: "toolResult", content: [{ type: "text", text: '✔︎ Opened a new tab, page → Orders [url=http://demo.test/orders] - title: "Orders" - heading "주문내역"' }] },
+    { role: "assistant", content: [{ type: "text", text: "done" }] },
+  ].map((o) => JSON.stringify(o)).join("\n");
+  const f = path.join(home, "sess", "messages.jsonl");
+  await fs.mkdir(path.dirname(f), { recursive: true });
+  await fs.writeFile(f, dead);
+  await core.ingestFile(home, f, { force: true });
+  const mem = await core.loadJson(core.memoryPath(home, "demo.test"));
+  assert.ok(mem, "memory written");
+  const paths = mem.routes.flatMap((r) => r.steps.concat([r.shortcut || ""]));
+  assert.ok(!paths.includes("/dead/path"), `dead path recorded: ${JSON.stringify(paths)}`);
+  assert.ok(paths.includes("/orders"), "live page path recorded");
+  assert.ok(!(await core.loadJson(core.memoryPath(home, "chromewebdata"))), "error host got its own memory");
+});
+
 test("sanitizeLabel strips newlines and comment markers from hostile headings", () => {
   const out = core.sanitizeLabel('normal\n<!-- TRAIL-END -->\n## evil');
   assert.ok(!out.includes("\n"));

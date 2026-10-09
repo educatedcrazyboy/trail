@@ -228,10 +228,15 @@ export async function extractSession(file) {
         if (act.kind === "navigate") {
           const h = hostOf(act.url);
           if (h) currentHost = h;
+          // a navigate that landed on a browser error page (404, DNS fail)
+          // teaches nothing — don't record its path as a route step.
+          const failed =
+            !!page?.url && /^(chrome-error:|edge-error:|about:blank)/.test(page.url);
           pushStep(currentHost, {
             kind: "navigate",
             url: sanitizeUrl(act.url),
             urlPath: urlPathOf(act.url),
+            failed,
           });
         } else if (act.kind === "click" || act.kind === "press" || act.kind === "selectOption") {
           pushStep(currentHost || pageHost, {
@@ -351,6 +356,8 @@ export async function distillFlows(home, extracted) {
   const results = [];
   for (const [host, site] of Object.entries(extracted.sites || {})) {
     if (host === "unknown") continue;
+    // browser error pages are not sites — skip chromewebdata & friends
+    if (/chromewebdata|^chrome\.|^edge\.|^devtools$|^about$/.test(host)) continue;
     const memFile = memoryPath(home, host);
     const mem =
       (await loadJson(memFile)) ?? {
@@ -370,6 +377,7 @@ export async function distillFlows(home, extracted) {
     // pages: record visits + elements
     const visit = [];
     for (const st of site.steps) {
+      if (st.failed) continue; // dead-end navigation — never a route step
       const p = st.urlPath || st.pageUrl;
       if (!p) continue;
       if (!visit.includes(p)) visit.push(p);
