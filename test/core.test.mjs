@@ -107,6 +107,7 @@ test("a changed path after learning records a correction", async () => {
 test("seedSessions baselines existing sessions so watch skips them", async () => {
   const home = await tmp();
   const acct = path.join(home, "acct");
+  await core.saveConfig(home, { enabled: true, emit: true, accountRoot: acct });
   const sessDir = path.join(acct, "sessions", "2026-10-09_oldsession");
   await fs.mkdir(sessDir, { recursive: true });
   await fs.copyFile(FIXTURE, path.join(sessDir, "messages.jsonl"));
