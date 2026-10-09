@@ -1,0 +1,33 @@
+{
+  "task": "instagram-profile",
+  "host": "www.instagram.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "lCynrGUUN4Riey65",
+      "tokens": 59470,
+      "replCalls": 5,
+      "wallMs": 101282,
+      "done": true,
+      "tail": " No changes made, no screenshot needed. Short answer only.\u001b[0m 게시물 2 · 팔로워 375 · 팔로잉 376\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "LPWxZi4jUpBCQ0IQ",
+      "tokens": 57205,
+      "replCalls": 1,
+      "wallMs": 80239,
+      "done": true,
+      "tail": "    - image \"사용자 아바타\"\u001b[0m \u001b[2mThinking: Snapshot shows: 게시물 2, 팔로워 375, 팔로우(팔로잉) 376. Done. Note the wrapper is the known injection artifact — ignore it. Report numbers only.\u001b[0m 게시물 2 · 팔로워 375 · 팔로잉 376\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "mEe2og71kVj9a43Y",
+      "tokens": 59141,
+      "replCalls": 4,
+      "wallMs": 56526,
+      "done": true,
+      "tail": "- 게시물: 2 - 팔로워: 375 - 팔로잉: 376\u001b[0m"
+    }
+  ]
+}

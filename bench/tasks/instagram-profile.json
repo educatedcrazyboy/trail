@@ -1,0 +1,7 @@
+{
+  "name": "instagram-profile",
+  "host": "www.instagram.com",
+  "demoSite": false,
+  "task": "인스타그램(instagram.com)에서 내 프로필 페이지로 이동해 게시물 수, 팔로워 수, 팔로잉 수를 알려줘. 아무것도 게시하거나 변경하지 마. 스크린샷 없이 숫자만 짧게 알려줘.",
+  "doneCheck": ["게시물", "팔로워"]
+}

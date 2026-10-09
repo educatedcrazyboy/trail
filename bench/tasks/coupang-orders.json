@@ -1,0 +1,7 @@
+{
+  "name": "coupang-orders",
+  "host": "coupang.com",
+  "demoSite": false,
+  "task": "쿠팡(coupang.com)에서 주문 목록(마이쿠팡 > 주문목록) 페이지로 이동해 가장 최근 주문의 상품명과 주문 상태를 알려줘. 아무것도 주문하거나 변경하지 마. 스크린샷 없이 결과만 짧게 알려줘.",
+  "doneCheck": ["주문"]
+}

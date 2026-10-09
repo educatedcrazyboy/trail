@@ -1,0 +1,33 @@
+{
+  "task": "instagram-profile",
+  "host": "instagram.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "9ugPaJ718pgeQXX2",
+      "tokens": 0,
+      "replCalls": 4,
+      "wallMs": 109151,
+      "done": true,
+      "tail": "게시물 2 · 팔로워 375 · 팔로잉 376  읽기만 하고 아무것도 변경하지 않았으며, 확인용으로 열었던 탭도 닫아두었습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "kFry1TlDchT2w7yK",
+      "tokens": 0,
+      "replCalls": 3,
+      "wallMs": 92099,
+      "done": true,
+      "tail": "- 팔로우: 376  읽기만 했고 아무 변경도 하지 않았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "aGUoLxRO8e6T6FEM",
+      "tokens": 0,
+      "replCalls": 2,
+      "wallMs": 61732,
+      "done": true,
+      "tail": "- 게시물: 2 - 팔로워: 375 - 팔로잉: 376\u001b[0m"
+    }
+  ]
+}
