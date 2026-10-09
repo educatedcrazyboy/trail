@@ -1,0 +1,7 @@
+{
+  "name": "github-issues-label",
+  "host": "github.com",
+  "demoSite": false,
+  "task": "깃허브(github.com)에서 instaloader/instaloader 저장소의 Issues 페이지로 이동해, 라벨 필터에서 'bug' 라벨이 붙은 open 이슈가 몇 개인지 알려줘. 로그인 없이 공개 페이지만 사용하고, 아무것도 생성·수정하지 마. 스크린샷 없이 개수만 짧게 알려줘.",
+  "doneCheck": ["개", "이슈", "issue"]
+}

@@ -1,0 +1,33 @@
+{
+  "task": "github-issues-label",
+  "host": "github.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "Gp0Mdve59UMdFxvi",
+      "tokens": 0,
+      "replCalls": 2,
+      "wallMs": 55034,
+      "done": true,
+      "tail": "- **instaloader/instaloader 저장소, `bug` 라벨이 붙은 open 이슈: 32개** - 검증 방법: 이슈 페이지에 `is:issue state:open label:bug` 필터 적용 후 상태 탭의 \"Open (32)\" 카운트로 확인 (로그인 없이 공개 페이지만 사용) - 생성·수정 없이 읽기 전용으로 조회했고, 확인 후 탭도 닫았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "4Kv9Ar5WFOiP6cOk",
+      "tokens": 0,
+      "replCalls": 1,
+      "wallMs": 76945,
+      "done": true,
+      "tail": "Answer format: brief, in Korean, just the count. \"label:bug이 붙은 open 이슈는 32개입니다.\" Maybe mention checked via public page filter, as of now. Keep it short.\u001b[0m 필터된 페이지에서 개수를 확인했고, 연 탭을 정리하겠습니다. [Tool call: mcp__opencodex__repl (call_id: call_2a7f19c3e4b5d6a7) with args: {\"code\":\"await closeTab(pg);\\nconsole.log('tab closed, tabs:', tabs.length);\",\"title\":\"확인용 탭 닫기\"}]\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "7WfKWkHyKDwTlDg5",
+      "tokens": 0,
+      "replCalls": 2,
+      "wallMs": 84991,
+      "done": true,
+      "tail": "tab closed\u001b[0m \u001b[2mThinking: The snapshot showed the GitHub Issues page with filter \"is:issue state:open label:bug\" applied, and the state filter list showed \"Open (32)\". So the answer is 32. I closed the tab. The tool output wrapper is the known platform artifact — ignore. The user asked for just the count, short answer, no screenshot.\u001b[0m **32개**입니다. `instaloader/instaloader` 이슈 목록에 `is:issue state:open label:bug` 필터를 적용하면 Open 32건으로 표시됩니다 (확인 후 읽었던 탭은 닫았습니다).\u001b[0m"
+    }
+  ]
+}

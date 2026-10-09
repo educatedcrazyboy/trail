@@ -1,0 +1,33 @@
+{
+  "task": "github-issues-label",
+  "host": "github.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "QvuzFG2nDIQGMlLh",
+      "tokens": 0,
+      "replCalls": 3,
+      "wallMs": 114143,
+      "done": true,
+      "tail": "instaloader/instaloader 저장소에는 **'enhancement' 라벨이 존재하지 않습니다** — 따라서 해당 라벨이 붙은 open 이슈는 **0개**입니다.  (참고: GitHub 필터에 넣으면 \"Invalid value for label\"로 표시되고, 라벨 목록 15개 중에 enhancement는 없습니다. 가장 비슷한 라벨은 **feature suggestion**이며 open 이슈 13개입니다.)\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "4QM6Gv9ZIZqdxRVa",
+      "tokens": 0,
+      "replCalls": 5,
+      "wallMs": 84681,
+      "done": true,
+      "tail": "**0개**입니다.  instaloader/instaloader 저장소에는 `enhancement` 라벨 자체가 없습니다. 라벨 필터에서 검색해도 결과가 없고, `label:enhancement` 필터 URL로 직접 확인해도 GitHub이 \"Invalid value enhancement for label\"이라며 0 results를 반환했습니다. 참고로 이 저장소의 가장 유사한 라벨은 `feature suggestion`입니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "QVqRz9revPwLT4ef",
+      "tokens": 0,
+      "replCalls": 4,
+      "wallMs": 76046,
+      "done": true,
+      "tail": " User asked for just the count, briefly, no screenshot. Keep it short.\u001b[0m **0개**입니다. instaloader/instaloader 저장소에는 'enhancement' 라벨 자체가 없어서(라벨 필터에 \"Invalid value enhancement\" 오류, Labels 페이지의 15개 라벨 목록에도 없음) 해당 라벨이 붙은 open 이슈는 없습니다. 참고로 이 저장소의 유사 라벨은 'feature suggestion'으로, open 이슈 13개입니다.\u001b[0m"
+    }
+  ]
+}
