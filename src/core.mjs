@@ -722,7 +722,9 @@ export async function scanSessions(home, accountRoot) {
 
 export async function report(home) {
   const state = (await loadJson(path.join(home, "state.json"))) ?? { sessions: {} };
-  const rows = Object.entries(state.sessions).map(([id, s]) => ({
+  const rows = Object.entries(state.sessions)
+    .filter(([, s]) => !s.seeded)
+    .map(([id, s]) => ({
     session: id,
     sites: (s.sites || []).join(","),
     replCalls: s.replCalls ?? 0,

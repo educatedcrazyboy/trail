@@ -33,10 +33,22 @@ README.md  LICENSE(MIT)  package.json  .gitignore
     `- heading "쪽지 작성" [level=1]`, `- link "쪽지 데스크" [ref=e1]`,
     `- textbox "쪽지 내용" [ref=e1]`, `- button "테스트 쪽지 저장" [ref=e2]`, `- form:`.
   - `usage` is cumulative per session: `{input,output,cacheRead,cacheWrite,reasoning,totalTokens}`.
-- Reuse channel: `<accountRoot>/skills/user/<name>/SKILL.md` is auto-discovered by
-  Aside (description text drives selection). `siteSpecific:true` and
-  `autoInject:{url:[...]}` frontmatter exist in builtins — emit them too.
+- Reuse channels (measured 2026-10-09):
+  1. `memory/MEMORY.md` — `aside exec` sessions load it into the prompt
+     (proven by a marker-echo experiment and by the agent quoting our index
+     verbatim). Trail maintains a marked block `<!-- TRAIL-BEGIN/END -->` at
+     the TOP with one line per learned site and the verified shortcut
+     INLINE, plus detail files at `memory/sites/trail-<slug>.md`. This is
+     the channel that actually drives reuse in exec sessions.
+  2. `<accountRoot>/skills/user/<name>/SKILL.md` — auto-discovered by the
+     app UI agent (description text drives selection; observed: a user skill
+     was read unprompted in an app session) but NOT surfaced to `aside exec`
+     sessions (two exec runs showed zero skill reads). Emitted anyway for
+     app sessions. `siteSpecific:true` + `autoInject:{url:[...]}` exist in
+     builtins — emit them too.
   Skill format contract: frontmatter strings MUST be double-quoted YAML.
+  Route labels must describe the TASK (the page heading at the task page,
+  not the completion page) or skill descriptions mismatch task wording.
 
 ## $TRAIL_HOME layout (default `~/.trail`, env `TRAIL_HOME`, flag `--home`)
 

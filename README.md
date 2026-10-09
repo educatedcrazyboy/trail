@@ -15,12 +15,15 @@ Aside는 똑같은 사이트에서도 매번 화면을 읽고, 버튼을 찾고,
    설치되고 세션 감시가 준비된다.
 2. 평소처럼 Aside에 작업을 시킨다. 작업이 끝나면 Trail이 세션 기록에서
    **사이트 구조와 작업 절차**만 추려 사이트별 메모리(`~/.trail`)에 저장한다.
-3. 저장된 경험은 사이트별 Aside 스킬(`skills/user/trail-<사이트>/`)로
-   자동 발행된다. 다음에 같은 사이트 작업을 시키면 Aside가 그 스킬을
-   스스로 읽고, 검증된 바로가기 경로로 바로 이동한다.
-4. 사이트가 바뀌어 저장된 경로가 안 맞으면 Aside는 스킬 지침에 따라 현재
-   화면을 다시 확인해 새 경로를 찾고, 다음 수집 때 Trail이 그 교정을 메모리에
-   반영한다.
+3. 저장된 경험은 두 갈래로 Aside에 돌려준다: 사이트별 스킬
+   (`skills/user/trail-<사이트>/`)과, Aside가 매 작업마다 읽는
+   `memory/MEMORY.md` 맨 앞의 학습 사이트 색인(마커 구간으로 관리,
+   검증된 바로가기를 인라인 표시). 다음에 같은 사이트 작업을 시키면
+   Aside가 그 색인을 보고 바로가기 경로로 바로 이동한다.
+4. 사이트가 바뀌어 저장된 경로가 안 맞으면 Aside는 현재 화면을 다시
+   확인해 새 경로를 찾고(실험에서 "shortcut doesn't match; explore
+   normally"라고 판단 후 정상 탐색 확인), 다음 수집 때 Trail이 그 교정을
+   메모리와 색인에 반영한다.
 
 ## 설치
 
@@ -68,15 +71,19 @@ Aside 안에서 "지금까지 배운 사이트 보여줘"라고 물어도 된다
 기억하지 않는 것: **입력한 값 자체**(메시지 내용, 수량, 수신자, 가격),
 비밀번호·결제 정보, 개인 대화 내용. 입력 칸의 "레이블"만 저장되고 값은 절대
 저장되지 않는다. 이메일·전화번호·카드번호 형태는 자동으로 `[redacted]` 처리된다.
-모든 데이터는 `~/.trail`과 Aside 스킬 폴더 안에만 있고 외부로 나가지 않는다.
+모든 데이터는 `~/.trail`, Aside 스킬 폴더, 그리고 Aside 메모리
+(`memory/sites/trail-*.md` + MEMORY.md의 표시 구간) 안에만 있고 외부로
+나가지 않는다. `trail forget`과 `trail off`는 이 세 곳을 함께 정리한다.
 
 ## 지금 버전의 한계 (솔직하게)
 
 - **실제로 끝낸 작업에서만 배운다.** 아직 가보지 않은 사이트 영역은 모른다.
   "이 사이트의 주요 기능을 미리 학습해줘" 같은 사전 학습은 향후 과제다.
-- 재사용은 Aside가 발행된 스킬을 스스로 선택하는 것에 의존한다
-  (스킬 설명 자동 선택 + 사이트별 자동 주입). Aside가 스킬을 선택하지 않는
-  작업에는 적용되지 않는다.
+- 재사용 채널은 Aside의 `memory/MEMORY.md` 적재에 기댄다 — 실측으로
+  CLI 작업(`aside exec`)은 사용자 스킬 카탈로그를 노출하지 않지만
+  MEMORY.md는 프롬프트에 들어감을 확인했다(마커 에코 + 단축경로 인용
+  실험). 앱 내 대화 세션은 사용자 스킬도 읽으므로 스킬 발행도 병행한다.
+  Aside가 메모리 적재 방식을 바꾸면 이 채널이 약해질 수 있다.
 - 사이트가 크게 개편되면 첫 작업은 다시 탐색이 필요하다 — 그 작업이
   교정으로 기록된다.
 - Aside의 세션 기록 형식(messages.jsonl)에 기대는 비공식 연동이다. Aside
@@ -97,6 +104,8 @@ node bin/trail.js verify
 Trail is a local, zero-dependency recorder that watches the Aside browser
 agent's session transcripts, distills per-site "how this site is used" memory
 (pages, routes, verified shortcuts — never the values you typed), and publishes
-it back as auto-loading Aside skills. Install once (`node bin/trail.js init`),
+it back as auto-loading Aside skills plus a marked index block at the top
+of Aside's own memory/MEMORY.md (the channel exec agents actually read).
+Install once (`node bin/trail.js init`),
 then use Aside as usual. Everything stays on your machine; `trail forget`,
 `trail off` give you control. MIT licensed.
