@@ -100,6 +100,12 @@ if (task.demoSite) {
   await new Promise((s) => setTimeout(s, 800));
 }
 
+// --only=cold|trail-on|trail-off runs just one scenario (for resuming a
+// crashed bench); the usual full run keeps the original sequence.
+const ONLY = process.argv.includes("--only")
+  ? process.argv[process.argv.indexOf("--only") + 1]
+  : null;
+
 const results = [];
 // fairness: the launchd watcher must not ingest benchmark sessions mid-run
 // (it would resurrect memory between runs). Stop it; restore in finally.
@@ -108,28 +114,36 @@ if (wasWatching) {
   trail("stop");
   console.log("watcher stopped for the bench — restored at the end");
 }
+
+async function scenario(name) {
+  console.log(`[${name}] run…`);
+  const r = await runTask();
+  results.push({ scenario: name, ...r });
+  console.log(`  -> ${r.tail}`);
+}
+
 try {
-  // A. cold — strip the whole Trail index + forget every host this task
-  // touches, so the agent starts with literally zero learned context.
-  trail("off");
-  for (const h of HOSTS) trail("forget", h);
-  console.log("[A] cold run (no memory, no index)…");
-  results.push({ scenario: "cold", ...(await runTask()) });
-  console.log(`  -> ${results[0].tail}`);
+  if (!ONLY || ONLY === "cold") {
+    // A. cold — strip the whole Trail index + forget every host this task
+    // touches, so the agent starts with literally zero learned context.
+    trail("off");
+    for (const h of HOSTS) trail("forget", h);
+    await scenario("cold");
+  }
 
-  // learn run A, then rerun with memory ON
-  console.log("[A] ingesting so Trail learns…");
-  trail("watch", "--once");
-  trail("on"); // re-emit the index so run B actually sees it
-  console.log("[B] rerun, trail on…");
-  results.push({ scenario: "trail-on", ...(await runTask()) });
-  console.log(`  -> ${results[1].tail}`);
+  if (!ONLY || ONLY === "trail-on") {
+    // learn whatever sessions exist since cold, then rerun with memory ON
+    console.log("[ingest] letting Trail learn…");
+    trail("watch", "--once");
+    trail("on"); // re-emit the index so the run actually sees it
+    await scenario("trail-on");
+  }
 
-  // C. trail off — index stripped from Aside memory, rerun blind
-  trail("off");
-  console.log("[C] rerun, trail off…");
-  results.push({ scenario: "trail-off", ...(await runTask()) });
-  console.log(`  -> ${results[2].tail}`);
+  if (!ONLY || ONLY === "trail-off") {
+    // C. trail off — index stripped from Aside memory, rerun blind
+    trail("off");
+    await scenario("trail-off");
+  }
 } finally {
   trail("on");
   if (wasWatching) trail("start");

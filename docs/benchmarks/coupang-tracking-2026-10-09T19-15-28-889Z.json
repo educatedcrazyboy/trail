@@ -1,0 +1,33 @@
+{
+  "task": "coupang-tracking",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "nF2671DZpWUs3wtA",
+      "tokens": 123959,
+      "replCalls": 10,
+      "wallMs": 414391,
+      "done": true,
+      "tail": "- **송장번호:** 10332324726846  상태는 배송시작 단계입니다. 주문·변경·취소·반품 동작은 하지 않았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "5rEAVpKaELRDVmwp",
+      "tokens": 112209,
+      "replCalls": 9,
+      "wallMs": 66564,
+      "done": true,
+      "tail": "- **택배사:** 쿠팡 로켓배송 (자체배송) - **송장번호:** 10332324726846 - 상태: 배송시작, 내일(일) 새벽 7시 전 도착 보장\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "mOlAfqbIjU6lN7wM",
+      "tokens": 61722,
+      "replCalls": 8,
+      "wallMs": 68995,
+      "done": true,
+      "tail": "- **송장번호**: `10332324726846`  새 탭에서 주문목록 → 주문 상세보기 → 배송조회로만 확인했고, 주문·변경·취소 신청은 하지 않았습니다.\u001b[0m"
+    }
+  ]
+}
