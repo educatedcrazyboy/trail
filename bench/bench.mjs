@@ -18,6 +18,9 @@ const taskFile = process.argv[2];
 const model = process.argv.includes("--model")
   ? process.argv[process.argv.indexOf("--model") + 1]
   : null;
+const effort = process.argv.includes("--effort")
+  ? process.argv[process.argv.indexOf("--effort") + 1]
+  : null;
 if (!taskFile) {
   console.error("usage: node bench/bench.mjs bench/tasks/<name>.json");
   process.exit(2);
@@ -59,6 +62,7 @@ async function runTask() {
   const out = await new Promise((resolve, reject) => {
     const args = ["exec"];
     if (model) args.push("-m", model);
+    if (effort) args.push("--effort", effort);
     args.push(task.task);
     const p = spawn(ASIDE, args, { encoding: "utf8" });
     let buf = "";

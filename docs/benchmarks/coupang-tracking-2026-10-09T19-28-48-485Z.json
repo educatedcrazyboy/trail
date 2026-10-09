@@ -1,0 +1,33 @@
+{
+  "task": "coupang-tracking",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "sm3wrXFGDEgnATyX",
+      "tokens": 104669,
+      "replCalls": 8,
+      "wallMs": 50719,
+      "done": true,
+      "tail": "가장 최근 주문(10/10, 아즈라 에어팟프로용 이어팁) 상세·배송조회 기준: 택배사: 로켓배송 송장번호: 10332324726846\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "zbhb1tEP8irjJWnS",
+      "tokens": 123969,
+      "replCalls": 23,
+      "wallMs": 216212,
+      "done": true,
+      "tail": "- 운송장 번호: 10332324726846  주문 상세에서 배송 조회로 들어가서 확인했고, 주문 변경이나 취소는 안 했어.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "CBxYOAgiRdZA5KZO",
+      "tokens": 73202,
+      "replCalls": 20,
+      "wallMs": 162210,
+      "done": true,
+      "tail": "- 상태: 배송시작, 내일(일) 새벽 7시 전 도착 보장  참고: 주문목록 페이지는 Akamai 차단으로 안 열려서, 주문 상세 직행 주소로 들어가 배송 조회에서 확인했습니다. 주문·취소·반품은 손대지 않았고 탭은 닫았습니다.\u001b[0m"
+    }
+  ]
+}
