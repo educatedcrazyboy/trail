@@ -1,0 +1,33 @@
+{
+  "task": "coupang-tracking",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "WEoTYLQb4xrqNU5N",
+      "tokens": 109719,
+      "replCalls": 11,
+      "wallMs": 128049,
+      "done": true,
+      "tail": "- **송장번호:** 아직 없음 — 상태가 **상품준비중**이라 운송장이 아직 발급되지 않았습니다 (송장번호 칸 비어 있음, `invoiceNumber` 빈값). 내일(일) 새벽 도착 보장 표기만 있음.  발송이 시작되면 송장번호가 뜹니다. 주문/취소/반품 등은 아무것도 하지 않았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "oOyAYHuPKkprW8ze",
+      "tokens": 109309,
+      "replCalls": 10,
+      "wallMs": 118677,
+      "done": true,
+      "tail": "- **송장번호: 미부여** — 아직 \"상품준비중\"이라 송장번호 칸이 비어 있습니다 (예상 도착은 내일(일) 새벽 7시 전).  송장번호는 발송 후 배송시작 단계에서 자동으로 채워집니다. 주문/변경/취소/반품은 아무것도 하지 않았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "SNpuHQr0INyyhuLn",
+      "tokens": 110665,
+      "replCalls": 14,
+      "wallMs": 122212,
+      "done": true,
+      "tail": "- **운송장 번호**: 아직 미발급 — 주문이 `상품준비중`이라 배송조회의 송장번호 칸이 비어 있습니다.  변경·취소·반품은 아무것도 하지 않았고, 주문상세 탭만 남겨두었습니다. 출고 후 송장번호가 생기면 다시 확인하면 됩니다.\u001b[0m"
+    }
+  ]
+}
