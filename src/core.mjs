@@ -64,7 +64,7 @@ export function parseReplCode(code) {
   const acts = [];
   if (typeof code !== "string") return acts;
   const re =
-    /openTab\s*\(\s*['"`]([^'"`]+)['"`]|\.goto\s*\(\s*['"`]([^'"`]+)['"`]|locator\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\.(click|fill|press|selectOption)\s*\(\s*(['"`]([^'"`]*)['"`])?|page\s*\.locator\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\.(click|fill|press|selectOption)\s*\(\s*(['"`]([^'"`]*)['"`])?|snapshot\s*\(|screenshot\s*\(/g;
+    /openTab\s*\(\s*['"`]([^'"`]+)['"`]|\.goto\s*\(\s*['"`]([^'"`]+)['"`]|locator\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\.(click|fill|press|selectOption)\s*\(\s*(['"`]([^'"`]*)['"`])?|page\s*\.locator\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\.(click|fill|press|selectOption)\s*\(\s*(['"`]([^'"`]*)['"`])?|snapshot\s*\(|screenshot\s*\(|page\.evaluate\s*\(/g;
   let m;
   while ((m = re.exec(code)) !== null) {
     if (m[1] || m[2]) {
@@ -75,12 +75,37 @@ export function parseReplCode(code) {
       acts.push({ kind: m[8], selector: m[7], value: m[10] ?? null });
     } else if (m[0].startsWith("screenshot")) {
       acts.push({ kind: "screenshot" });
+    } else if (m[0].startsWith("page.evaluate")) {
+      // a DOM-data read: fingerprint WHICH source the agent pulled from so a
+      // repeat run can jump straight to it instead of rescanning the page.
+      const near = code.slice(m.index, m.index + 400);
+      let fp = null;
+      for (const [pat, kind] of DATA_SOURCE_PATTERNS)
+        if (pat.test(near)) { fp = kind; break; }
+      if (fp) {
+        const sm = near.match(
+          /(__NEXT_DATA__|__NUXT__|__INITIAL_STATE__|__APOLLO_STATE__|__PRELOADED_STATE__|contentDocument|contentWindow|innerText|textContent|querySelector(?:All)?|getElementsBy\w+|localStorage|sessionStorage)((?:\.[A-Za-z_$][\w$]*){0,3})/
+        );
+        const src = sm
+          ? sanitizeValue(sm[1] + (sm[2] || "")).slice(0, 48)
+          : fp;
+        acts.push({ kind: "eval", fingerprint: fp, source: src });
+      }
     } else {
       acts.push({ kind: "snapshot" });
     }
   }
   return acts;
 }
+
+// data locations agents read via page.evaluate, most specific first
+const DATA_SOURCE_PATTERNS = [
+  [/__(?:NEXT_DATA|NUXT|INITIAL_STATE|APOLLO_STATE|PRELOADED_STATE)__/, "embedded-json"],
+  [/contentDocument|contentWindow|iframe/i, "iframe"],
+  [/innerText|textContent/i, "dom-text"],
+  [/querySelector(?:All)?|getElementsBy(?:Tag|Class)Name/, "dom-query"],
+  [/localStorage|sessionStorage/, "storage"],
+];
 
 // ---------- redaction ----------
 
@@ -351,6 +376,31 @@ export async function extractSession(file) {
             // value intentionally dropped
           });
           act._fillValue = true;
+        } else if (act.kind === "eval") {
+          // a page.evaluate data read: attach it to the page it ran on so a
+          // repeat agent can jump to the same source instead of rescanning.
+          const evalHost = currentHost || pageHost;
+          const evalSameHost = !!(pageHost && pageHost === evalHost);
+          const lastSteps = extracted.sites[evalHost]?.steps || [];
+          const lastPageUrl = [...lastSteps]
+            .reverse()
+            .find((s) => s.pageUrl)?.pageUrl;
+          const pageUrl =
+            (evalSameHost && page ? routePathOf(page.url) : null) ??
+            lastPageUrl ??
+            null;
+          const ok =
+            resultText != null &&
+            !/^\s*(undefined|null|\[\]|\{\}|""|''|Error|TypeError|ReferenceError|Evaluation failed)/.test(
+              resultText
+            );
+          pushStep(evalHost || "unknown", {
+            kind: "eval",
+            fingerprint: act.fingerprint,
+            source: act.source,
+            ok,
+            pageUrl,
+          });
         } else {
           pushStep(currentHost || pageHost, { kind: act.kind });
         }
@@ -526,6 +576,29 @@ export async function distillFlows(home, extracted) {
         const set = new Set([...(pg.elements.textbox || []), st.fillField]);
         pg.elements.textbox = [...set];
       }
+      if (st.kind === "eval" && st.ok && st.pageUrl && st.fingerprint) {
+        // dataHints: which source on this page yielded data — repeat agents
+        // read it directly instead of rescanning the DOM.
+        const pg = (mem.pages[st.pageUrl] ??= { count: 0, elements: {} });
+        pg.dataHints ??= [];
+        const key = `${st.fingerprint}:${(st.source || st.fingerprint).toLowerCase().replace(/[\s'"]+/g, "")}`;
+        const ex = pg.dataHints.find((h) => h.key === key);
+        if (ex) {
+          ex.hits++;
+          ex.lastSeen = nowIso();
+        } else {
+          pg.dataHints.push({
+            key,
+            kind: st.fingerprint,
+            source: st.source || st.fingerprint,
+            hits: 1,
+            lastSeen: nowIso(),
+            evidence: `session ${extracted.sessionId}`,
+          });
+        }
+        pg.dataHints.sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen));
+        pg.dataHints = pg.dataHints.slice(0, 3);
+      }
     }
 
     // route: visit path ending at the last page of the session
@@ -624,7 +697,7 @@ description: "Use saved navigation experience for ${escapeYaml(labels || "record
 autoInject:
   url: ["${host}"]
 ---
-Read references/memory.md before browsing ${host}. Prefer the verified shortcut if it still works on the page you see now; otherwise use normal navigation and verify each result against the page. A Template line is not a shortcut: never open a URL that still contains "{" or "}". Treat every requested value (recipient, message text, quantity, option, price) as fresh input from the current request — never reuse remembered values or old element refs. Verify completion from what the page shows, not from memory. In your final answer, mention the memory provenance marker only if you actually read and used the memory.
+Read references/memory.md before browsing ${host}. Open the learned shortcut directly; if its page title and path match memory, read the answer from that first snapshot and skip a second verification pass. Otherwise navigate normally. If a "Where the data lives" entry names a source on the page you're on, read it with page.evaluate before scanning the DOM. A Template line is not a shortcut: never open a URL that still contains "{" or "}". Requested values (recipient, text, quantity, option, price) come only from the current request — never from memory. Verify completion by the final page's heading or result, not by re-exploring. Mention the memory provenance marker only if you actually read and used the memory.
 `;
 
   const lines = [];
@@ -636,14 +709,34 @@ Read references/memory.md before browsing ${host}. Prefer the verified shortcut 
   lines.push("");
   lines.push("## Pages observed");
   lines.push("");
+  // element names the learned steps actually use — keep selector-referenced
+  // names, then cap the rest at 6 so a page dump stays small (dataHints now
+  // carry the 'where the answer was' signal these lists were a proxy for).
+  const usedLabels = new Set();
+  for (const e of mem.leadsTo || []) {
+    const sm = (e.selector || "").match(/"([^"]+)"/);
+    if (sm) usedLabels.add(sm[1]);
+  }
+  const keepTrim = (arr) => {
+    const seen = new Set();
+    const used = [], rest = [];
+    for (const v of arr || []) {
+      if (seen.has(v)) continue;
+      seen.add(v);
+      (usedLabels.has(v) ? used : rest).push(v);
+    }
+    return used.concat(rest.slice(0, 6));
+  };
   for (const [p, pg] of Object.entries(mem.pages)) {
     lines.push(`- ${p} — ${pg.heading || pg.title || "(page)"} (seen ${pg.count}x)`);
-    const els = pg.elements || {};
     const bits = [];
-    if (els.textbox?.length) bits.push(`inputs: ${els.textbox.join(", ")}`);
-    if (els.button?.length) bits.push(`buttons: ${els.button.join(", ")}`);
-    if (els.link?.length) bits.push(`links: ${els.link.join(", ")}`);
-    if (bits.length) lines.push(`  - ${bits.join(" | ")}`);
+    const t = keepTrim(pg.elements?.textbox);
+    const b = keepTrim(pg.elements?.button);
+    const l = keepTrim(pg.elements?.link);
+    if (t.length) bits.push(`inputs: ${t.join(", ")}`);
+    if (b.length) bits.push(`buttons: ${b.join(", ")}`);
+    if (l.length) bits.push(`links: ${l.join(", ")}`);
+    if (bits.length) lines.push(`  - Elements: ${bits.join(" | ")}`);
   }
   lines.push("");
   lines.push("## Learned routes");
@@ -668,6 +761,27 @@ Read references/memory.md before browsing ${host}. Prefer the verified shortcut 
     }
     lines.push(`  - Seen ${r.seen}x, verified ${r.success}x, last ${r.lastSeen}`);
   }
+  // dataHints: which source on a page held the answer — read it directly
+  // instead of rescanning the DOM.
+  const hintPages = Object.entries(mem.pages).filter(
+    ([, pg]) => pg.dataHints?.length
+  );
+  if (hintPages.length) {
+    lines.push("");
+    lines.push("## Where the data lives");
+    lines.push("");
+    let emitted = 0;
+    for (const [p, pg] of hintPages) {
+      for (const h of pg.dataHints) {
+        if (emitted >= 8) break;
+        emitted++;
+        lines.push(
+          `- \`${p}\` — the answer was in \`${h.source}\`. Read it with page.evaluate on that source instead of rescanning the DOM. Seen ${h.hits}x, last ${h.lastSeen.slice(0, 10)}.`
+        );
+      }
+    }
+    lines.push("");
+  }
   if (mem.leadsTo?.length) {
     lines.push("");
     lines.push("## Cross-site links");
@@ -683,12 +797,13 @@ Read references/memory.md before browsing ${host}. Prefer the verified shortcut 
     for (const c of mem.corrections.slice(-5)) lines.push(`- ${c.at}: ${c.what}`);
   }
   lines.push("");
-  lines.push("## Re-check every time");
+  lines.push("## What memory does not cover");
   lines.push("");
-  lines.push("- The current request's values (recipient, text, quantity, options) — never reuse remembered ones.");
-  lines.push("- Element refs and exact labels from a live snapshot — memory describes pages, it does not pin selectors.");
-  lines.push("- If a shortcut leads to an unexpected page (404, login wall, changed layout), fall back to normal navigation.");
-  lines.push("- A \"{\" or \"}\" in a path is a placeholder, not an address. Substitute the named value, then open the result. If you do not have the value, open the stable page that leads there and read it on the page.");
+  lines.push("- Requested values (recipient, text, quantity, options): read them from the request, never from memory.");
+  lines.push("- Element refs and labels: take them from the first live snapshot. If a shortcut's page title and path match memory, that snapshot is enough — read the answer from it and do not re-derive it by rescanning the DOM or clicking controls.");
+  lines.push("- Shortcut lands on an unexpected page (404, login wall, changed layout): navigate normally from there.");
+  lines.push("- \"{\" or \"}\" in a path is a placeholder, not an address. Substitute the named value, then open the result; if you lack the value, open the stable page that leads there and read it on the page.");
+  lines.push("- Data locations shift with redesigns — if a remembered source returns undefined/null, scan the live page.");
   lines.push("");
   lines.push(`Memory provenance marker: ${marker}.`);
   lines.push("");
@@ -751,8 +866,22 @@ export async function syncAsideMemory(home, accountRoot) {
             }),
           ]
         : []),
+      ...(Object.entries(mem.pages || {}).some(([, pg]) => pg.dataHints?.length)
+        ? [
+            "",
+            "## Data locations",
+            ...Object.entries(mem.pages)
+              .filter(([, pg]) => pg.dataHints?.length)
+              .flatMap(([p, pg]) =>
+                pg.dataHints.map(
+                  (h) => `- ${p}: read \`${h.source}\` via page.evaluate`
+                )
+              )
+              .slice(0, 8),
+          ]
+        : []),
       "",
-      "Rules: verify each learned step against the live page; request-time values are never in memory; if a path fails, explore normally and the correction is recorded on next ingest.",
+      "Rules: open the learned shortcut directly; if its title/path match, answer from that first snapshot. Requested values come only from the request — never reuse remembered values or element refs. If a shortcut lands somewhere unexpected, navigate normally and the correction is recorded on next ingest. If a 'Data locations' note names a source on the page, read it via page.evaluate first.",
       "",
     ].join("\n");
     await fs.writeFile(siteFile, body);
