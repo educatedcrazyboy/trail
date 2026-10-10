@@ -1,0 +1,8 @@
+{
+  "name": "coupang-last-delivered",
+  "host": "mc.coupang.com",
+  "hosts": ["mc.coupang.com", "www.coupang.com"],
+  "demoSite": false,
+  "task": "쿠팡(coupang.com) 주문목록에서 가장 최근에 '배송완료'된 주문을 찾아서, 그 주문의 상품명과 배송완료 날짜를 알려줘. 주문목록 페이지에서 해당 주문의 상세보기로 들어가 확인해야 해. 반드시 openTab으로 새 탭을 열어 처음부터 시작하고, 이미 열려 있는 탭에는 절대 붙지 마. 주문·변경·취소·반품 동작은 절대 하지 마. 스크린샷 없이 짧게만 알려줘.",
+  "doneCheck": ["배송완료", "상품"]
+}
