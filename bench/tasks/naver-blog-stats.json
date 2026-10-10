@@ -1,0 +1,8 @@
+{
+  "name": "naver-blog-stats",
+  "host": "admin.blog.naver.com",
+  "hosts": ["admin.blog.naver.com", "blog.naver.com"],
+  "demoSite": false,
+  "task": "내 네이버 블로그 관리 페이지에서 오늘 방문자 수와 최근 7일간 일별 방문자 수를 알려줘. 블로그 관리(admin.blog.naver.com)에 들어가서 통계/방문자 메뉴를 찾아야 해. 반드시 openTab으로 새 탭을 열어 처음부터 시작하고, 이미 열려 있는 탭에는 절대 붙지 마. 글 작성·삭제·설정 변경은 절대 하지 말고 조회만 해. 짧게만 알려줘.",
+  "doneCheck": ["방문자"]
+}
