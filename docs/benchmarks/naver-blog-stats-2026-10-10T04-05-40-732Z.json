@@ -1,0 +1,33 @@
+{
+  "task": "naver-blog-stats",
+  "host": "admin.blog.naver.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "HEvgFMDcSYjNnH9F",
+      "tokens": 69370,
+      "replCalls": 7,
+      "wallMs": 86745,
+      "done": true,
+      "tail": " 순방문자수 통계는 하루 늦게 집계돼서 10/9 기준 1명으로 표시돼. \u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "KnOWcxABx8PyBAwO",
+      "tokens": 56144,
+      "replCalls": 2,
+      "wallMs": 34225,
+      "done": true,
+      "tail": "- 최근 7일: 10/3 3명, 10/4 0명, 10/5 1명, 10/6 0명, 10/7 6명, 10/8 0명, 10/9 1명  ![블로그 통계 캡처](/Users/songyeongchan/.aside/u/0/sessions/2026-10-10_KnOWcxABx8PyBAwO/tmp/repl-display-axEOkKaYc2cJ8H6i.jpeg)\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "aX28gpeRsbNUZyQs",
+      "tokens": 58901,
+      "replCalls": 10,
+      "wallMs": 85569,
+      "done": true,
+      "tail": "- 10/7: 6 - 10/8: 0 - 10/9: 1\u001b[0m"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "task": "coupang-tracking",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "WzJA74TSHKA2w6oi",
+      "tokens": 72497,
+      "replCalls": 10,
+      "wallMs": 65588,
+      "done": true,
+      "tail": "- 주문: 2026.10.10, 주문번호 17103500095423 (아즈라 이어팁) - 택배사: 로켓배송 - 송장번호: 10332324726846\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "JGtQP0MhtyI9D3kG",
+      "tokens": 69369,
+      "replCalls": 9,
+      "wallMs": 64207,
+      "done": true,
+      "tail": " - 택배사: 로켓배송 - 운송장번호: 10332324726846\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "KZXUjtcowcaYk9Td",
+      "tokens": 61231,
+      "replCalls": 8,
+      "wallMs": 54946,
+      "done": true,
+      "tail": " - 택배사: 로켓배송 - 송장번호: 10332324726846\u001b[0m"
+    }
+  ]
+}
