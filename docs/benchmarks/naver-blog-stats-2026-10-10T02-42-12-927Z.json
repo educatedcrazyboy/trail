@@ -1,0 +1,33 @@
+{
+  "task": "naver-blog-stats",
+  "host": "admin.blog.naver.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "7Ijczxc9ZqsLZyvo",
+      "tokens": 109443,
+      "replCalls": 12,
+      "wallMs": 111904,
+      "done": true,
+      "tail": "  - 10/3(토) **3명**  경로: 관리 > 내 블로그 통계 > 순방문자수 (`admin.blog.naver.com/songyeongchan/stat/uv`, 기준일 2026.10.09)\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "xhkY1DyQH4SUMLW9",
+      "tokens": 94808,
+      "replCalls": 4,
+      "wallMs": 40283,
+      "done": true,
+      "tail": "- 10/05(월): 1 - 10/04(일): 0 - 10/03(토): 3\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "MngcaRpgZbVXJ06B",
+      "tokens": 62220,
+      "replCalls": 10,
+      "wallMs": 97641,
+      "done": true,
+      "tail": "- 10/3 3명  관리 > 통계 > 순방문자수 기준, 조회만 했음.\u001b[0m"
+    }
+  ]
+}

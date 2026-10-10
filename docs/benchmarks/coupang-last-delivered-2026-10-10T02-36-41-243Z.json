@@ -1,0 +1,33 @@
+{
+  "task": "coupang-last-delivered",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "Gfh9VCUIrNc1DtAe",
+      "tokens": 114712,
+      "replCalls": 10,
+      "wallMs": 93309,
+      "done": true,
+      "tail": "- 배송완료: 10/6(화) 도착 (주문상세에서 확인)  주문·취소 등 아무것도 건드리지 않고 조회만 했어.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "PEhqfP9j2pER9x5U",
+      "tokens": 111361,
+      "replCalls": 10,
+      "wallMs": 87761,
+      "done": true,
+      "tail": "- 상품명:   1. 비플레인 녹두 약산성 클렌징폼 120ml + 80ml 기획세트, 200ml, 1세트   2. 리브러쉬 티트리 100배 수면가글 농축 가글액, 50ml, 1개\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "XAP9WiCf2UgMjryo",
+      "tokens": 67352,
+      "replCalls": 11,
+      "wallMs": 113353,
+      "done": true,
+      "tail": "- 상품명:   1. 비플레인 녹두 약산성 클렌징폼 120ml + 80ml 기획세트, 200ml, 1세트   2. 리브러쉬 티트리 100배 수면가글 농축 가글액, 50ml, 1개\u001b[0m"
+    }
+  ]
+}
