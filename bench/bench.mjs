@@ -63,11 +63,11 @@ async function runTask() {
     const args = ["exec"];
     if (model) args.push("-m", model);
     if (effort) args.push("--effort", effort);
-    // fairness: every scenario warms the SAME host first — open the host
-    // root, then close the tab — so TLS/JS/DNS cache state is equal and no
-    // run gets a free warm cache from the previous one.
+    // fairness: every scenario warms the SAME hosts first — open each
+    // host root, then close the tabs — so TLS/JS/DNS cache state is equal
+    // and no run gets a free warm cache from the previous one.
     args.push(
-      `먼저 openTab으로 http://${HOST} 를 열고, 바로 그 탭을 닫아. 그 다음에 이 작업을 해: ` +
+      `먼저 openTab으로 ${HOSTS.map((h) => `http://${h}`).join(" 과 ")} 를 각각 열어 보고, 그 탭들을 모두 닫아. 그 다음에 이 작업을 해: ` +
         task.task
     );
     const p = spawn(ASIDE, args, { encoding: "utf8" });
@@ -145,15 +145,23 @@ try {
   }
 
   if (!ONLY || ONLY === "trail-on") {
-    // learn whatever sessions exist since cold, then rerun with memory ON
+    // learn whatever sessions exist since cold, then rerun with memory ON.
+    // watch --once runs while cfg.emit=false (trail off state), so it only
+    // fills memory.json — 'on' rewrites the index but does NOT re-emit
+    // skills. distill closes that gap: SKILL.md + references are
+    // auto-injected context trail-on depends on.
     console.log("[ingest] letting Trail learn…");
     trail("watch", "--once");
     trail("on"); // re-emit the index so the run actually sees it
+    trail("distill"); // re-emit per-site skills too (auto-injected body)
     await scenario("trail-on");
   }
 
   if (!ONLY || ONLY === "trail-off") {
-    // C. trail off — index stripped from Aside memory, rerun blind
+    // C. trail off — rerun blind. 'off' strips the index + site files but
+    // leaves skills/user/trail-* dirs in place; forget each task host first
+    // so trail-off can't ride the skill trail-on just created.
+    for (const h of HOSTS) trail("forget", h);
     trail("off");
     await scenario("trail-off");
   }
