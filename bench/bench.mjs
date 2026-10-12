@@ -68,7 +68,13 @@ async function runTask() {
     // and no run gets a free warm cache from the previous one.
     args.push(
       `먼저 openTab으로 ${HOSTS.map((h) => `http://${h}`).join(" 과 ")} 를 각각 열어 보고, 그 탭들을 모두 닫아. 그 다음에 이 작업을 해: ` +
-        task.task
+        task.task +
+        // token-leak guard: an effort-off agent that loses the plot can loop
+        // hundreds of read_file/repl calls (observed: 206 calls, 415k tokens).
+        // A hard call budget identical across scenarios keeps one runaway
+        // run from torching the whole suite budget — fairness is preserved
+        // because the same cap binds cold, trail-on, and trail-off alike.
+        ` 한계: 도구 호출은 총 40회까지. 40회 안에 답을 못 찾으면 찾은 것까지만 요약하고 멈춰.`
     );
     const p = spawn(ASIDE, args, { encoding: "utf8" });
     let buf = "";
