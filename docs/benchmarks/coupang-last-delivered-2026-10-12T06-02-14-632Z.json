@@ -1,0 +1,33 @@
+{
+  "task": "coupang-last-delivered",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "YeEWgFMazwEs9ety",
+      "tokens": 59455,
+      "replCalls": 13,
+      "wallMs": 92182,
+      "done": true,
+      "tail": "- 상품명: 아즈라세드나이어핏맥스에어팟프로용이어팁, 아이보리, 2개, 맥스-M, M - 주문일: 2026.10.10 (주문번호 17103500095423) - 배송완료: 10월 11일(일) 01:08, 상세페이지 배송조회에서 확인\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "fmpLRtdd07BFywjh",
+      "tokens": 74896,
+      "replCalls": 11,
+      "wallMs": 86822,
+      "done": true,
+      "tail": "- 주문: 2026.10.10, 주문번호 17103500095423 - 상품: 아즈라세드나이어핏맥스에어팟프로용이어팁, 아이보리, 2개, 맥스-M, M - 배송완료: 어제(일) 도착, 10/11\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "wa9ggWLxGjqxgSdh",
+      "tokens": 79261,
+      "replCalls": 24,
+      "wallMs": 191814,
+      "done": true,
+      "tail": "- 배송완료: 2026.10.11 (목록에 어제(일) 도착, 배송조회 01:08 배송완료)  주문·변경·취소·반품은 하지 않았고 탭도 정리했습니다.\u001b[0m"
+    }
+  ]
+}
