@@ -1,0 +1,33 @@
+{
+  "task": "coupang-tracking",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "onOAn1ILjTnz8GXK",
+      "tokens": 65678,
+      "replCalls": 8,
+      "wallMs": 75392,
+      "done": true,
+      "tail": "- 송장번호: **10332324726846**  주문·변경·취소·반품 신청은 하지 않았고, 조회용 탭도 모두 닫았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "Nhdy2KvoRRld9lEg",
+      "tokens": 58140,
+      "replCalls": 11,
+      "wallMs": 80215,
+      "done": true,
+      "tail": "- 송장번호: **10332324726846**  주문·변경·취소·반품 신청은 하지 않았습니다. 작업 종료 후 탭은 모두 닫았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "pVAkW3BUgCNZQllu",
+      "tokens": 57562,
+      "replCalls": 9,
+      "wallMs": 72048,
+      "done": true,
+      "tail": "- 송장번호: 10332324726846  주문·변경·취소·반품 신청은 하지 않았습니다.\u001b[0m"
+    }
+  ]
+}

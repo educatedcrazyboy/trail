@@ -1,0 +1,33 @@
+{
+  "task": "naver-blog-stats",
+  "host": "admin.blog.naver.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "LuBN7AZnnp383IxU",
+      "tokens": 67372,
+      "replCalls": 19,
+      "wallMs": 169140,
+      "done": true,
+      "tail": "  - 10/05(월) 0  피이웃·서로이웃·기타 전 구간 모두 0입니다. 요청대로 1차 openTab 2개(관리/블로그)는 열었다 바로 닫았고, 조회용 새 탭으로 처음부터 시작했으며 글 작성·삭제·설정 변경은 없었습니다. 마지막에 탭 0개로 정리했습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "qZEw8sZCJ9yevcQj",
+      "tokens": 53792,
+      "replCalls": 7,
+      "wallMs": 46488,
+      "done": true,
+      "tail": "| 10.06 (화) | 0 | 0 |  통계 페이지는 조회 기준일이 10.11까지 내려가 있고, 10.01~10.05 포함 15일간 전 구간 0이라 블로그 방문이 전혀 없는 상태입니다. (경로: 내 블로그 통계 → 일간 현황, 방문 분석 → 조회수·순방문자수)\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "JzJhk64Sq6YYAH0S",
+      "tokens": 415799,
+      "replCalls": 0,
+      "wallMs": 3313496,
+      "done": true,
+      "tail": "- 2026-09-14 — Confirmed Onbid publishes no winner name on either the 물건 or 공고 입찰결과 pages, identified the municipal contract-disclosure and notice boards as the alternative sources, and recorded that 개찰 and 낙찰자발표 can be hours apart (Bucheon Ojeong notice had 개찰 10:00 but 낙찰자발표 12:00 이후). Source: memory/episodic/2026-09-14.md\u001b[0m   • \u001b[31mError\u001b[0m 429: {\"code\":\"429\",\"message\":\"quota exhausted\",\"type\":\"limitation\"}"
+    }
+  ]
+}
