@@ -1,0 +1,8 @@
+{
+  "name": "google-scholar-paper",
+  "host": "scholar.google.com",
+  "hosts": ["scholar.google.com"],
+  "demoSite": false,
+  "task": "Google Scholar에서 'Attention Is All You Need' 논문을 검색해서 첫 번째 저자 이름, 발표 연도, 그리고 현재 인용 횟수(Cited by 숫자)를 알려줘. 반드시 openTab으로 새 탭을 열어 처음부터 시작하고, 이미 열려 있는 탭에는 절대 붙지 마. 논문 다운로드나 저장 같은 건 하지 말고 조회만 해. 짧게만 알려줘.",
+  "doneCheck": ["Vaswani"]
+}

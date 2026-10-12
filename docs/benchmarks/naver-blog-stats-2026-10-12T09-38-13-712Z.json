@@ -1,0 +1,33 @@
+{
+  "task": "naver-blog-stats",
+  "host": "admin.blog.naver.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "4pejtw8Ktk2hbhEI",
+      "tokens": 63297,
+      "replCalls": 18,
+      "wallMs": 137623,
+      "done": true,
+      "tail": "| 10.05(월) | 0명 |  방문 횟수도 전부 0회, 조회수 순위 테이블은 \"데이터가 없습니다\"였습니다. 조회만 했고 수정 사항 없습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "YxJWEECdqfsjtn5p",
+      "tokens": 82685,
+      "replCalls": 19,
+      "wallMs": 146741,
+      "done": true,
+      "tail": "참고: 순방문자수 표는 최신 값이 10/11까지(10/12는 아직 반영 전)이고, 그 표에 표시된 10/06~10/11 전 구간이 0명입니다. 방문 횟수(방문수)도 같은 기간 전부 0회였습니다. 테스트용/방문객 없는 상태로 보입니다.  최초에 요청하신 admin.blog.naver.com / blog.naver.com 두 탭은 openTab으로 열었다가 바로 닫았고, 통계 조회용으로 새로 연 탭들도 전부 닫았습니다. 글 작성·삭제·설정 변경은 하지 않았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "Ej7MbR5cthIsbn8N",
+      "tokens": 71501,
+      "replCalls": 13,
+      "wallMs": 100158,
+      "done": true,
+      "tail": "| 0명 | 0명 | 0명 | 0명 | 0명 | 0명 | 0명 |  9/27~10/11 전 구간 0명이라, 방금 쓴 새 블로그(글 1개) 상태 그대로입니다.\u001b[0m"
+    }
+  ]
+}

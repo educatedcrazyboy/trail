@@ -1,0 +1,33 @@
+{
+  "task": "youtube-top-video",
+  "host": "www.youtube.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "lp0DNvYA01F7E4t2",
+      "tokens": 42393,
+      "replCalls": 2,
+      "wallMs": 41203,
+      "done": true,
+      "tail": "- **제목**: PSY - GANGNAM STYLE(강남스타일) M/V - **채널**: officialpsy - **조회수**: 약 60억 8,989만 (6,089,897,293회)\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "7rDbRX4rtKwPQTyb",
+      "tokens": 64222,
+      "replCalls": 8,
+      "wallMs": 60453,
+      "done": true,
+      "tail": "- **제목**: PSY - GANGNAM STYLE(강남스타일) M/V - **채널**: officialpsy - **조회수**: 6,089,899,198회 (약 60.9억)\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "LxlWeDwA7UGWzEZN",
+      "tokens": 42765,
+      "replCalls": 3,
+      "wallMs": 57436,
+      "done": true,
+      "tail": "- 제목: PSY - GANGNAM STYLE(강남스타일) M/V - 채널: officialspy → officialspy 아님, **officialpsy** - 조회수: 약 **60.9억 회** (6,089,899,198회)\u001b[0m"
+    }
+  ]
+}
