@@ -1,0 +1,33 @@
+{
+  "task": "coupang-tracking",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "M8qL3ZyCyAJyKIO8",
+      "tokens": 58737,
+      "replCalls": 10,
+      "wallMs": 184773,
+      "done": true,
+      "tail": "가장 최근 주문(2026-10-10, 주문번호 17103500095423) 상세에서 확인: - 택배사: 로켓배송 - 송장번호: 10332324726846\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "JHFaliMRmfNdIbmv",
+      "tokens": 68754,
+      "replCalls": 8,
+      "wallMs": 76214,
+      "done": true,
+      "tail": "가장 최근 주문(2026.10.10, 주문번호 17103500095423) 상세의 배송 조회 결과: - 택배사: 로켓배송 - 송장번호: 10332324726846\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "sLGlvQKxu8NsEuKP",
+      "tokens": 59721,
+      "replCalls": 14,
+      "wallMs": 79862,
+      "done": true,
+      "tail": "가장 최근 주문: 2026.10.10, 주문번호 17103500095423 - 택배사: 로켓배송 - 송장번호: 10332324726846\u001b[0m"
+    }
+  ]
+}
