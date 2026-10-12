@@ -1,0 +1,33 @@
+{
+  "task": "naver-blog-stats",
+  "host": "admin.blog.naver.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "c2gMjgly24tzl9QI",
+      "tokens": 58790,
+      "replCalls": 11,
+      "wallMs": 98479,
+      "done": true,
+      "tail": "  - 10/07(수) 6   - 10/06(화) 0   - 10/05(월) 1\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "h7KR1ItXyLNQEj19",
+      "tokens": 72249,
+      "replCalls": 18,
+      "wallMs": 158388,
+      "done": true,
+      "tail": "- 오늘(10/12, 15:36 기준): 조회수 0, 방문 0 - 최근 7일 순방문자수: 10/5 1명, 10/6 0, 10/7 6명, 10/8 0, 10/9 1명, 10/10 3명, 10/11 1명 - 참고 방문횟수: 10/5 1회, 10/6 0, 10/7 9회, 10/8 0, 10/9 1회, 10/10 3회, 10/11 1회\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "plwv52W3zfxMtkfV",
+      "tokens": 65616,
+      "replCalls": 13,
+      "wallMs": 98178,
+      "done": true,
+      "tail": "관리 > 내 블로그 통계 > 순방문자수 기준이에요.  ![통계 화면](file:///Users/songyeongchan/.aside/u/0/sessions/2026-10-12_plwv52W3zfxMtkfV/tmp/repl-display-O4TC0EBlXaJR6Trs.jpeg)\u001b[0m"
+    }
+  ]
+}
