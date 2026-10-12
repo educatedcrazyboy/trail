@@ -103,7 +103,9 @@ async function runTask() {
   }
   const stats = await measureSession(id);
   const transcript = await fs.readFile(path.join(SESSIONS, id, "messages.jsonl"), "utf8");
-  const done = (task.doneCheck || []).every((s) => out.includes(s) || transcript.includes(s));
+  // a run only counts as done if the agent actually worked — error output
+  // (429 / usage-limit) can accidentally contain doneCheck fragments.
+  const done = stats.replCalls > 0 && (task.doneCheck || []).every((s) => out.includes(s) || transcript.includes(s));
   return { ...stats, wallMs, done, tail: out.trim().split("\n").slice(-3).join(" ") };
 }
 
