@@ -63,7 +63,13 @@ async function runTask() {
     const args = ["exec"];
     if (model) args.push("-m", model);
     if (effort) args.push("--effort", effort);
-    args.push(task.task);
+    // fairness: every scenario warms the SAME host first — open the host
+    // root, then close the tab — so TLS/JS/DNS cache state is equal and no
+    // run gets a free warm cache from the previous one.
+    args.push(
+      `먼저 openTab으로 http://${HOST} 를 열고, 바로 그 탭을 닫아. 그 다음에 이 작업을 해: ` +
+        task.task
+    );
     const p = spawn(ASIDE, args, { encoding: "utf8" });
     let buf = "";
     p.stdout.on("data", (d) => (buf += d));
@@ -128,10 +134,13 @@ async function scenario(name) {
 
 try {
   if (!ONLY || ONLY === "cold") {
-    // A. cold — strip the whole Trail index + forget every host this task
-    // touches, so the agent starts with literally zero learned context.
-    trail("off");
+    // A. cold — forget every host this task touches FIRST (forget re-writes
+    // the index via unsync->sync), THEN strip the whole index off. Doing
+    // it in the old order (off, then forget) re-created the index for the
+    // cold run — cold carried ~250 unrelated site lines that trail-off
+    // never saw.
     for (const h of HOSTS) trail("forget", h);
+    trail("off");
     await scenario("cold");
   }
 

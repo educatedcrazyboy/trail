@@ -64,7 +64,7 @@ export function parseReplCode(code) {
   const acts = [];
   if (typeof code !== "string") return acts;
   const re =
-    /openTab\s*\(\s*['"`]([^'"`]+)['"`]|\.goto\s*\(\s*['"`]([^'"`]+)['"`]|locator\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\.(click|fill|press|selectOption)\s*\(\s*(['"`]([^'"`]*)['"`])?|page\s*\.locator\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\.(click|fill|press|selectOption)\s*\(\s*(['"`]([^'"`]*)['"`])?|snapshot\s*\(|screenshot\s*\(|page\.evaluate\s*\(/g;
+    /openTab\s*\(\s*['"`]([^'"`]+)['"`]|\.goto\s*\(\s*['"`]([^'"`]+)['"`]|locator\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\.(click|fill|press|selectOption)\s*\(\s*(['"`]([^'"`]*)['"`])?|page\s*\.locator\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\.(click|fill|press|selectOption)\s*\(\s*(['"`]([^'"`]*)['"`])?|snapshot\s*\(|screenshot\s*\(|page\.evaluate\s*\(|locator\s*\(\s*['"`][^'"`]*__(?:NEXT_DATA|NUXT|INITIAL_STATE|APOLLO_STATE|PRELOADED_STATE)__[^'"`]*['"`]\s*\)\s*\.(?:textContent|innerText)\s*\(|getByText\s*\([^)]*\)\s*\.(?:all|count|nth)\s*\(/g;
   let m;
   while ((m = re.exec(code)) !== null) {
     if (m[1] || m[2]) {
@@ -75,9 +75,11 @@ export function parseReplCode(code) {
       acts.push({ kind: m[8], selector: m[7], value: m[10] ?? null });
     } else if (m[0].startsWith("screenshot")) {
       acts.push({ kind: "screenshot" });
-    } else if (m[0].startsWith("page.evaluate")) {
+    } else if (m[0].startsWith("page.evaluate") || /__(?:NEXT_DATA|NUXT|INITIAL_STATE|APOLLO_STATE|PRELOADED_STATE)__/.test(m[0])) {
       // a DOM-data read: fingerprint WHICH source the agent pulled from so a
       // repeat run can jump straight to it instead of rescanning the page.
+      // Covers page.evaluate(...) AND locator("#__NEXT_DATA__").textContent()
+      // — cold sessions reach embedded JSON through locators, not only eval.
       const near = code.slice(m.index, m.index + 400);
       let fp = null;
       for (const [pat, kind] of DATA_SOURCE_PATTERNS)
@@ -91,6 +93,9 @@ export function parseReplCode(code) {
           : fp;
         acts.push({ kind: "eval", fingerprint: fp, source: src });
       }
+    } else if (m[0].startsWith("getByText")) {
+      // enumerating text occurrences (list-scan read) — a weaker dom-text hint.
+      acts.push({ kind: "eval", fingerprint: "dom-text", source: "getByText" });
     } else {
       acts.push({ kind: "snapshot" });
     }
@@ -547,6 +552,53 @@ export async function distillFlows(home, extracted) {
         }
       }
       if (st.failed) continue; // dead-end navigation — never a route step
+      if (st.kind === "eval" && st.ok && st.fingerprint) {
+        // dataHints: which source yielded data — repeat agents read it
+        // directly instead of rescanning the DOM. Stored at HOST level:
+        // embedded JSON like __NEXT_DATA__ exists site-wide, and pageUrl
+        // is often unresolved when the eval ran inside a frame/tab the
+        // extractor could not tie to a page.
+        mem.dataHints ??= [];
+        const hkey = `${st.fingerprint}:${(st.source || st.fingerprint).toLowerCase().replace(/[\s'"]+/g, "")}`;
+        const hex = mem.dataHints.find((h) => h.key === hkey);
+        if (hex) {
+          hex.hits++;
+          hex.lastSeen = nowIso();
+        } else {
+          mem.dataHints.push({
+            key: hkey,
+            kind: st.fingerprint,
+            source: st.source || st.fingerprint,
+            hits: 1,
+            lastSeen: nowIso(),
+            evidence: `session ${extracted.sessionId}`,
+          });
+        }
+        mem.dataHints.sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen));
+        mem.dataHints = mem.dataHints.slice(0, 5);
+        if (st.pageUrl) {
+          const pg = (mem.pages[st.pageUrl] ??= { count: 0, elements: {} });
+          pg.dataHints ??= [];
+          const key = `${st.fingerprint}:${(st.source || st.fingerprint).toLowerCase().replace(/[\s'"]+/g, "")}`;
+          const ex = pg.dataHints.find((h) => h.key === key);
+          if (ex) {
+            ex.hits++;
+            ex.lastSeen = nowIso();
+          } else {
+            pg.dataHints.push({
+              key,
+              kind: st.fingerprint,
+              source: st.source || st.fingerprint,
+              hits: 1,
+              lastSeen: nowIso(),
+              evidence: `session ${extracted.sessionId}`,
+            });
+          }
+          pg.dataHints.sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen));
+          pg.dataHints = pg.dataHints.slice(0, 3);
+        }
+        continue;
+      }
       const p = st.urlPath || st.pageUrl;
       if (!p) continue;
       if (!visit.includes(p)) visit.push(p);
@@ -575,29 +627,6 @@ export async function distillFlows(home, extracted) {
         pg.elements = pg.elements || {};
         const set = new Set([...(pg.elements.textbox || []), st.fillField]);
         pg.elements.textbox = [...set];
-      }
-      if (st.kind === "eval" && st.ok && st.pageUrl && st.fingerprint) {
-        // dataHints: which source on this page yielded data — repeat agents
-        // read it directly instead of rescanning the DOM.
-        const pg = (mem.pages[st.pageUrl] ??= { count: 0, elements: {} });
-        pg.dataHints ??= [];
-        const key = `${st.fingerprint}:${(st.source || st.fingerprint).toLowerCase().replace(/[\s'"]+/g, "")}`;
-        const ex = pg.dataHints.find((h) => h.key === key);
-        if (ex) {
-          ex.hits++;
-          ex.lastSeen = nowIso();
-        } else {
-          pg.dataHints.push({
-            key,
-            kind: st.fingerprint,
-            source: st.source || st.fingerprint,
-            hits: 1,
-            lastSeen: nowIso(),
-            evidence: `session ${extracted.sessionId}`,
-          });
-        }
-        pg.dataHints.sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen));
-        pg.dataHints = pg.dataHints.slice(0, 3);
       }
     }
 
@@ -689,6 +718,17 @@ export async function emitSkill(home, accountRoot, host) {
   const origin = `http://${host}`;
   const labels = mem.routes.map((r) => r.label).slice(0, 3).join(", ");
   const marker = `TRAIL-${rand6()}`;
+  // surface the top data location inline — the agent never reads
+  // references/memory.md in practice, so the hint must live in the
+  // auto-injected body to be seen.
+  const topHint = [...(mem.dataHints || []), ...Object.values(mem.pages || {}).flatMap((pg) => pg.dataHints || [])]
+    .sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen))[0];
+  const hintPage = topHint
+    ? Object.entries(mem.pages).find(([, pg]) => pg.dataHints?.includes(topHint))?.[0]
+    : null;
+  const dataHintLine = topHint
+    ? `Data: on ${hintPage || "the page"} the answer was in \`${topHint.source}\` — read it with page.evaluate before scanning the DOM.`
+    : "If a \"Where the data lives\" entry names a source on the page you're on, read it with page.evaluate before scanning the DOM.";
 
   const skillMd = `---
 name: "trail-${slug}"
@@ -697,7 +737,7 @@ description: "Use saved navigation experience for ${escapeYaml(labels || "record
 autoInject:
   url: ["${host}"]
 ---
-Read references/memory.md before browsing ${host}. Open the learned shortcut directly; if its page title and path match memory, read the answer from that first snapshot and skip a second verification pass. Otherwise navigate normally. If a "Where the data lives" entry names a source on the page you're on, read it with page.evaluate before scanning the DOM. A Template line is not a shortcut: never open a URL that still contains "{" or "}". Requested values (recipient, text, quantity, option, price) come only from the current request — never from memory. Verify completion by the final page's heading or result, not by re-exploring. Mention the memory provenance marker only if you actually read and used the memory.
+Read references/memory.md before browsing ${host}. Open the learned shortcut directly; if its page title and path match memory, read the answer from that first snapshot and skip a second verification pass. Otherwise navigate normally. ${dataHintLine} A Template line is not a shortcut: never open a URL that still contains "{" or "}". Requested values (recipient, text, quantity, option, price) come only from the current request — never from memory. Verify completion by the final page's heading or result, not by re-exploring. Mention the memory provenance marker only if you actually read and used the memory.
 `;
 
   const lines = [];
@@ -881,8 +921,15 @@ export async function syncAsideMemory(home, accountRoot) {
     // index row: the signal the agent needs is "this host has a shortcut".
     // Keep it one short line — full details live in the site file / skill.
     const first = (mem.routes || []).find((r) => r.shortcut && !/[{}]/.test(r.shortcut));
+    // surface the single best data location right in the index — the agent
+    // reads this line every request; it must not have to open a file to
+    // learn which source held the answer.
+    const topHint = [...(mem.dataHints || []), ...Object.values(mem.pages || {}).flatMap((pg) => pg.dataHints || [])]
+      .sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen))[0];
     entries.push(
-      `- ${mem.host} → ${first?.shortcut || Object.keys(mem.pages || {})[0] || "/"} · memory/sites/trail-${siteSlug(mem.host)}.md`
+      `- ${mem.host} → ${first?.shortcut || Object.keys(mem.pages || {})[0] || "/"}` +
+        (topHint ? ` · read \`${topHint.source}\` via page.evaluate` : "") +
+        ` · memory/sites/trail-${siteSlug(mem.host)}.md`
     );
   }
   const block =
