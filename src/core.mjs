@@ -706,7 +706,7 @@ export async function distillFlows(home, extracted) {
     await saveJson(memFile, mem);
     let emitted = null;
     if (cfg.emit !== false && cfg.enabled !== false) {
-      emitted = await emitSkill(home, cfg.accountRoot || DEFAULT_ACCOUNT_ROOT, host);
+      emitted = await emitSkill(home, cfg.accountRoot || DEFAULT_ACCOUNT_ROOT, host, { skipThin: true });
       await syncAsideMemory(home, cfg.accountRoot || DEFAULT_ACCOUNT_ROOT);
     }
     results.push({ host, memory: memFile, emitted });
@@ -729,11 +729,23 @@ function rand6() {
     .toUpperCase();
 }
 
-export async function emitSkill(home, accountRoot, host) {
+export async function emitSkill(home, accountRoot, host, opts = {}) {
   const mem = await loadJson(memoryPath(home, host));
   if (!mem) throw new Error(`no site memory for ${host}`);
   const slug = siteSlug(host);
   const dir = skillDir(accountRoot, host);
+  // skipThin: when nothing is reusable, delete the skill instead of
+  // leaving a stub — a stub still costs the agent a file read per task
+  // and buys zero guidance.
+  if (opts.skipThin) {
+    const reusable = (mem.routes || []).some((r) => r.shortcut && r.shortcut !== "/" && !/[{}]/.test(r.shortcut))
+      || (mem.dataHints || []).length
+      || Object.values(mem.pages || {}).some((pg) => pg.dataHints?.length);
+    if (!reusable) {
+      await fs.rm(dir, { recursive: true, force: true });
+      return null;
+    }
+  }
   const title =
     Object.values(mem.pages).find((p) => p.title)?.title || host;
   const origin = `http://${host}`;
