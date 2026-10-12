@@ -652,11 +652,16 @@ export async function distillFlows(home, extracted) {
       // in the index and skills that cost agents reads but saved nothing.
       const literalSteps = preCompletion.filter((p) => !/[{}]/.test(p));
       const lastStable = literalSteps.length >= 2 ? literalSteps[literalSteps.length - 1] : null;
+      // never shortcut to "/" — opening the site root saves nothing and a
+      // learned "open /" only teaches the agent a page it was going to
+      // visit anyway.
+      if (lastStable === "/") literalSteps.length = 0;
+      const lastStableOk = lastStable && lastStable !== "/" ? lastStable : null;
       const key = endPath.split("?")[0] + "::" + (site.lastPage?.heading || "");
       const existing = mem.routes.find((r) => r.key === key || samePath(r.steps, preCompletion));
       // label = the TASK page heading (last page before the completion page),
       // not the completion heading — agents match skills on task wording.
-      const taskPath = lastStable || endPath;
+      const taskPath = lastStableOk || endPath;
       const taskHeading = Object.entries(mem.pages).find(
         ([p]) => p === taskPath
       )?.[1]?.heading;
@@ -664,27 +669,33 @@ export async function distillFlows(home, extracted) {
         (taskHeading ? sanitizeLabel(taskHeading) : null) ||
         preCompletion[preCompletion.length - 1] ||
         endPath;
+      // an error/wall page (Access Denied, 차단, ...) is a dead end, never a
+      // destination — recording its route taught agents to re-open walls.
+      const isWall = /denied|forbidden|blocked|차단|접근 ?불가|오류|error/i.test(label);
       if (existing) {
         existing.seen++;
         existing.success++;
         existing.lastSeen = nowIso();
         if (taskHeading && existing.label !== sanitizeLabel(taskHeading))
           existing.label = sanitizeLabel(taskHeading) || label;
-        if (lastStable && existing.shortcut && existing.shortcut !== lastStable) {
+        if (lastStableOk && existing.shortcut && existing.shortcut !== lastStableOk) {
           mem.corrections.push({
             at: nowIso(),
-            what: `shortcut ${existing.shortcut} -> ${lastStable}`,
+            what: `shortcut ${existing.shortcut} -> ${lastStableOk}`,
             evidence: `session ${extracted.sessionId}`,
           });
-          existing.shortcut = lastStable;
+          existing.shortcut = lastStableOk;
         }
-        if (!existing.shortcut && lastStable) existing.shortcut = lastStable;
-      } else {
+        if (!existing.shortcut && lastStableOk) existing.shortcut = lastStableOk;
+        // purge stale junk once seen: a recorded "/" or wall shortcut is
+        // poison to the next agent even if an old memory file taught it.
+        if (existing.shortcut === "/") delete existing.shortcut;
+      } else if (!isWall) {
         mem.routes.push({
           key,
           label,
           steps: visit,
-          shortcut: lastStable,
+          shortcut: lastStableOk,
           seen: 1,
           success: 1,
           lastSeen: nowIso(),
@@ -737,15 +748,24 @@ export async function emitSkill(home, accountRoot, host) {
     ? Object.entries(mem.pages).find(([, pg]) => pg.dataHints?.includes(topHint))?.[0]
     : null;
   const dataHintLine = topHint
-    ? `Data: on ${hintPage || "the page"} the answer was in \`${topHint.source}\` — run ${hintRead(topHint.source)} before scanning the DOM.`
-    : "If a \"Where the data lives\" entry names a source on the page you're on, read it with page.evaluate before scanning the DOM.";
+    ? `The answer was read from \`${topHint.source}\` — run ${hintRead(topHint.source)} before scanning the DOM.`
+    : "";
 
-  // a memory with neither a real shortcut nor a data map cannot save work —
-  // emit a stub so the auto-injected skill still fires but tells the agent
-  // to navigate normally instead of burning calls reading empty files.
-  const hasShortcut = (mem.routes || []).some((r) => r.shortcut && !/[{}]/.test(r.shortcut));
-  const skillBody = hasShortcut || topHint
-    ? `Read references/memory.md before browsing ${host}. ${hasShortcut ? "Open the learned shortcut directly; if its page title and path match memory, read the answer from that first snapshot and skip a second verification pass. Otherwise navigate normally. " : ""}${dataHintLine} A Template line is not a shortcut: never open a URL that still contains "{" or "}". Requested values (recipient, text, quantity, option, price) come only from the current request — never from memory. Verify completion by the final page's heading or result, not by re-exploring. Mention the memory provenance marker only if you actually read and used the memory.`
+  // imperative script, not prose: effort-off models follow literal STEP
+  // lines far better than a paragraph of advice. A shortcut only counts
+  // when it is openable (literal, not "/", not a template).
+  const goodRoute = (mem.routes || []).find((r) => r.shortcut && r.shortcut !== "/" && !/[{}]/.test(r.shortcut));
+  const hasShortcut = !!goodRoute;
+  const steps = [];
+  if (hasShortcut)
+    steps.push(`STEP 1: run await openTab('${origin}${goodRoute.shortcut}') and snapshot the page.`);
+  else
+    steps.push(`STEP 1: open ${origin} and navigate to the page that fits the task.`);
+  if (topHint)
+    steps.push(`STEP ${steps.length + 1}: ${dataHintLine}`);
+  steps.push(`STEP ${steps.length + 1}: read the answer from the first snapshot. If the page title or path does not match the task, navigate normally.`);
+  const skillBody = steps.length > 1 || topHint
+    ? steps.join(" ") + ` Values in the URL (order id, recipient, date) come only from the current request — never from memory. No second verification pass when the first snapshot already shows the answer. Marker ${marker}: cite only if you actually used this skill.`
     : `Nothing reusable is saved for ${host} yet — navigate normally.`;
 
   const skillMd = `---
@@ -898,7 +918,9 @@ export async function syncAsideMemory(home, accountRoot) {
     // decide worth FIRST: no literal shortcut and no data map means the
     // memory can save an agent no work — listing it only buys wasted
     // file reads. Drop the site file so it cannot be found by accident.
-    const first = (mem.routes || []).find((r) => r.shortcut && !/[{}]/.test(r.shortcut));
+    // A "/" shortcut is worth nothing either — purge stale memories that
+    // still carry one (pre-gate data or a dead-end wall route).
+    const first = (mem.routes || []).find((r) => r.shortcut && r.shortcut !== "/" && !/[{}]/.test(r.shortcut));
     const topHint = [...(mem.dataHints || []), ...Object.values(mem.pages || {}).flatMap((pg) => pg.dataHints || [])]
       .sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen))[0];
     const siteFile = path.join(memDir, "sites", `trail-${siteSlug(mem.host)}.md`);
@@ -913,7 +935,7 @@ export async function syncAsideMemory(home, accountRoot) {
     await fs.mkdir(path.dirname(siteFile), { recursive: true });
     // compact: the agent only needs the route + where the data lives.
     // Prose and boilerplate stripped — this file is loaded per-request.
-    const routeLines = (mem.routes || []).filter((r) => r.shortcut).map(
+    const routeLines = (mem.routes || []).filter((r) => r.shortcut && r.shortcut !== "/").map(
       (r) =>
         `- ${r.label}: shortcut: open ${r.shortcut}` +
         (/[{}]/.test(r.shortcut || "") ? " — template, substitute the named value first" : "")

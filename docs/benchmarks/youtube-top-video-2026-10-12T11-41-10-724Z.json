@@ -1,0 +1,33 @@
+{
+  "task": "youtube-top-video",
+  "host": "www.youtube.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "bsVRTFhZKEOO5ylw",
+      "tokens": 42642,
+      "replCalls": 3,
+      "wallMs": 27837,
+      "done": true,
+      "tail": "- 제목: PSY - GANGNAM STYLE(강남스타일) M/V - 채널: officialpsy - 조회수: 6,089,958,388회\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "sexRKYbwo8WBVk81",
+      "tokens": 45371,
+      "replCalls": 5,
+      "wallMs": 38955,
+      "done": true,
+      "tail": "- 제목: PSY - GANGNAM STYLE(강남스타일) M/V - 채널: officialpsy - 조회수: 6,089,958,388회\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "V8UQ5uT2m2sB0RFM",
+      "tokens": 42620,
+      "replCalls": 3,
+      "wallMs": 54352,
+      "done": true,
+      "tail": "- **조회수:** 약 60억 뷰  검색 결과 1위이자 조회수 최고 영상입니다. 탭은 전부 닫았고, 재생·댓글은 하지 않았습니다.\u001b[0m"
+    }
+  ]
+}

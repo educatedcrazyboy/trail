@@ -1,0 +1,33 @@
+{
+  "task": "naver-blog-stats",
+  "host": "admin.blog.naver.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "zncgETYGYCCgauP9",
+      "tokens": 76449,
+      "replCalls": 26,
+      "wallMs": 313024,
+      "done": true,
+      "tail": "  - 10.10(토) 0   - 10.11(일) 0 - 참고: 순방문자수 메뉴의 표는 기준일이 10.11까지만 잡혀서 10.12 행은 노드에 없었습니다. 10.12 값은 일간 현황 화면에서 직접 확인한 0입니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "gG5wmeFDGMxCPeLg",
+      "tokens": 97369,
+      "replCalls": 43,
+      "wallMs": 587785,
+      "done": true,
+      "tail": "| 10/6 | 0 |  참고: 관리 페이지의 달력에서 10/12가 비활성(오늘은 아직 데이터 미반영)이라, 통계 프레임의 공식 조회 API(`/api/blog/visit/uv` 등)를 직접 읽어 확인했습니다. 트레일 경유 마커: TRAIL-EB958D.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "riagGoUCzNBnnVN3",
+      "tokens": 66001,
+      "replCalls": 15,
+      "wallMs": 126126,
+      "done": true,
+      "tail": "| 10/05 (월) | 0 |  10/05~10/11 전부 0명이고, 순방문자수 화면은 최신 값이 10/11까지라 10/12는 아직 반영 안 됐습니다. (피이웃/서로이웃/기타도 모두 0)\u001b[0m"
+    }
+  ]
+}
