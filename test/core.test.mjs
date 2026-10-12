@@ -158,7 +158,9 @@ test("Aside memory bridge writes a marked index block + site file", async () => 
   const md = await fs.readFile(path.join(acct, "memory", "MEMORY.md"), "utf8");
   assert.match(md, /keep me/);
   assert.match(md, /TRAIL-BEGIN/);
-  assert.match(md, /memory\/sites\/trail-127-0-0-1-8769\.md/);
+  // slim index: header names the detail-file pattern; rows stay one line
+  assert.match(md, /memory\/sites\/trail-<host>\.md/);
+  assert.match(md, /- 127\.0\.0\.1:8769 → \/compose/);
   const site = await fs.readFile(path.join(acct, "memory", "sites", "trail-127-0-0-1-8769.md"), "utf8");
   assert.match(site, /shortcut: open \/compose/);
   assert.ok(!site.includes("FIRST-RUN"));

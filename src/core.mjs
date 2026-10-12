@@ -141,6 +141,15 @@ export function sanitizeLabel(s) {
     .slice(0, 120);
 }
 
+// a recorded data source (e.g. "__NEXT_DATA__") rendered as a literal
+// expression the agent can paste into repl — vague "read X via
+// page.evaluate" phrasing made agents DOM-scan instead of evaluating.
+export function hintRead(source) {
+  if (/^__[A-Z_]+__$/.test(source || ""))
+    return `page.evaluate(() => JSON.parse(document.getElementById('${source}').textContent))`;
+  return `page.evaluate(() => ${source})`;
+}
+
 export function sanitizeUrl(u) {
   try {
     const url = new URL(u);
@@ -633,15 +642,16 @@ export async function distillFlows(home, extracted) {
     // route: visit path ending at the last page of the session
     if (visit.length) {
       const endPath = visit[visit.length - 1];
-      const shortcut =
-        visit.length >= 2 ? visit[visit.length - 1] : null; // last stable path
       const preCompletion = endPath.startsWith("/done")
         ? visit.slice(0, -1)
         : visit;
       // a parameterized path ({orderId}) is a template, not an openable URL —
-      // the shortcut is the last LITERAL path on the route
+      // the shortcut is the last LITERAL path on the route, and only exists
+      // when the route skipped at least one intermediate hop. A single-page
+      // visit has no shortcuttable path; storing one put junk "open /" rows
+      // in the index and skills that cost agents reads but saved nothing.
       const literalSteps = preCompletion.filter((p) => !/[{}]/.test(p));
-      const lastStable = literalSteps.length ? literalSteps[literalSteps.length - 1] : null;
+      const lastStable = literalSteps.length >= 2 ? literalSteps[literalSteps.length - 1] : null;
       const key = endPath.split("?")[0] + "::" + (site.lastPage?.heading || "");
       const existing = mem.routes.find((r) => r.key === key || samePath(r.steps, preCompletion));
       // label = the TASK page heading (last page before the completion page),
@@ -727,8 +737,16 @@ export async function emitSkill(home, accountRoot, host) {
     ? Object.entries(mem.pages).find(([, pg]) => pg.dataHints?.includes(topHint))?.[0]
     : null;
   const dataHintLine = topHint
-    ? `Data: on ${hintPage || "the page"} the answer was in \`${topHint.source}\` — read it with page.evaluate before scanning the DOM.`
+    ? `Data: on ${hintPage || "the page"} the answer was in \`${topHint.source}\` — run ${hintRead(topHint.source)} before scanning the DOM.`
     : "If a \"Where the data lives\" entry names a source on the page you're on, read it with page.evaluate before scanning the DOM.";
+
+  // a memory with neither a real shortcut nor a data map cannot save work —
+  // emit a stub so the auto-injected skill still fires but tells the agent
+  // to navigate normally instead of burning calls reading empty files.
+  const hasShortcut = (mem.routes || []).some((r) => r.shortcut && !/[{}]/.test(r.shortcut));
+  const skillBody = hasShortcut || topHint
+    ? `Read references/memory.md before browsing ${host}. ${hasShortcut ? "Open the learned shortcut directly; if its page title and path match memory, read the answer from that first snapshot and skip a second verification pass. Otherwise navigate normally. " : ""}${dataHintLine} A Template line is not a shortcut: never open a URL that still contains "{" or "}". Requested values (recipient, text, quantity, option, price) come only from the current request — never from memory. Verify completion by the final page's heading or result, not by re-exploring. Mention the memory provenance marker only if you actually read and used the memory.`
+    : `Nothing reusable is saved for ${host} yet — navigate normally.`;
 
   const skillMd = `---
 name: "trail-${slug}"
@@ -737,7 +755,7 @@ description: "Use saved navigation experience for ${escapeYaml(labels || "record
 autoInject:
   url: ["${host}"]
 ---
-Read references/memory.md before browsing ${host}. Open the learned shortcut directly; if its page title and path match memory, read the answer from that first snapshot and skip a second verification pass. Otherwise navigate normally. ${dataHintLine} A Template line is not a shortcut: never open a URL that still contains "{" or "}". Requested values (recipient, text, quantity, option, price) come only from the current request — never from memory. Verify completion by the final page's heading or result, not by re-exploring. Mention the memory provenance marker only if you actually read and used the memory.
+${skillBody}
 `;
 
   const lines = [];
@@ -877,15 +895,25 @@ export async function syncAsideMemory(home, accountRoot) {
     if (!d.isDirectory()) continue;
     const mem = await loadJson(path.join(sitesDir, d.name, "memory.json"));
     if (!mem?.host || (!mem.routes?.length && !mem.leadsTo?.length)) continue;
+    // decide worth FIRST: no literal shortcut and no data map means the
+    // memory can save an agent no work — listing it only buys wasted
+    // file reads. Drop the site file so it cannot be found by accident.
+    const first = (mem.routes || []).find((r) => r.shortcut && !/[{}]/.test(r.shortcut));
+    const topHint = [...(mem.dataHints || []), ...Object.values(mem.pages || {}).flatMap((pg) => pg.dataHints || [])]
+      .sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen))[0];
+    const siteFile = path.join(memDir, "sites", `trail-${siteSlug(mem.host)}.md`);
+    if (!first && !topHint) {
+      await fs.rm(siteFile, { force: true });
+      continue;
+    }
     const title =
       Object.values(mem.pages || {}).find((p) => p.title)?.title || mem.host;
     const labels = (mem.routes || []).map((r) => r.label).join(", ");
     // per-site detail file in Aside's own memory tree
-    const siteFile = path.join(memDir, "sites", `trail-${siteSlug(mem.host)}.md`);
     await fs.mkdir(path.dirname(siteFile), { recursive: true });
     // compact: the agent only needs the route + where the data lives.
     // Prose and boilerplate stripped — this file is loaded per-request.
-    const routeLines = (mem.routes || []).map(
+    const routeLines = (mem.routes || []).filter((r) => r.shortcut).map(
       (r) =>
         `- ${r.label}: shortcut: open ${r.shortcut}` +
         (/[{}]/.test(r.shortcut || "") ? " — template, substitute the named value first" : "")
@@ -893,7 +921,7 @@ export async function syncAsideMemory(home, accountRoot) {
     const dataLines = Object.entries(mem.pages || {})
       .filter(([, pg]) => pg.dataHints?.length)
       .flatMap(([p, pg]) =>
-        pg.dataHints.map((h) => `- ${p}: read \`${h.source}\` via page.evaluate`)
+        pg.dataHints.map((h) => `- ${p}: ${hintRead(h.source)}`)
       )
       .slice(0, 8);
     const body = [
@@ -917,26 +945,26 @@ export async function syncAsideMemory(home, accountRoot) {
       "",
     ].join("\n");
     await fs.writeFile(siteFile, body);
-    // never emit a template as an openable Shortcut — only literal paths
-    // index row: the signal the agent needs is "this host has a shortcut".
-    // Keep it one short line — full details live in the site file / skill.
-    const first = (mem.routes || []).find((r) => r.shortcut && !/[{}]/.test(r.shortcut));
-    // surface the single best data location right in the index — the agent
-    // reads this line every request; it must not have to open a file to
-    // learn which source held the answer.
-    const topHint = [...(mem.dataHints || []), ...Object.values(mem.pages || {}).flatMap((pg) => pg.dataHints || [])]
-      .sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen))[0];
-    entries.push(
-      `- ${mem.host} → ${first?.shortcut || Object.keys(mem.pages || {})[0] || "/"}` +
-        (topHint ? ` · read \`${topHint.source}\` via page.evaluate` : "") +
-        ` · memory/sites/trail-${siteSlug(mem.host)}.md`
-    );
+    // index row: one short line per worth-while site — the shortcut and,
+    // when known, the exact expression that reads the data. No trailing
+    // file pointer: the header already names the per-site path pattern.
+    entries.push({
+      ts: mem.updatedAt || "",
+      line:
+        `- ${mem.host} → ${first?.shortcut || Object.keys(mem.pages || {})[0] || "/"}` +
+        (topHint ? ` · ${hintRead(topHint.source)}` : ""),
+    });
   }
+  // cap the index: rows past ~50 only cost prompt tokens nobody reads
+  const lines = entries
+    .sort((a, b) => b.ts.localeCompare(a.ts))
+    .slice(0, 50)
+    .map((e) => e.line);
   const block =
     `${MEM_BEGIN} -- managed by Trail, edits will be overwritten -->\n` +
     `## Trail: learned site shortcuts\n` +
     `If the target host appears below, open the shortcut directly instead of navigating. Details per host: memory/sites/trail-<host>.md.\n` +
-    (entries.length ? entries.join("\n") : `- (nothing learned yet)`) +
+    (lines.length ? lines.join("\n") : `- (nothing learned yet)`) +
     `\n${MEM_END} -->`;
   let cur = "";
   try {
