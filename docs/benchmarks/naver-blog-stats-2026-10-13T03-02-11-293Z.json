@@ -1,0 +1,33 @@
+{
+  "task": "naver-blog-stats",
+  "host": "admin.blog.naver.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "U0nWX3Z1QpRXI8cz",
+      "tokens": 55272,
+      "replCalls": 13,
+      "wallMs": 81887,
+      "done": true,
+      "tail": "- 조회수 추이(9/29~10/13)도 전 기간 0으로, \"해당 기간의 데이터가 없습니다\" 상태  참고: `admin.blog.naver.com` 루트는 404라서 블로그 홈에서 내 블로그 ID를 확인한 뒤 `admin.blog.naver.com/educatedcrazyboy` 관리 페이지의 \"내 블로그 통계\" → 순방문자수 메뉴에서 조회했습니다. 순방문자수 통계는 하루 늦게 집계되어 최신 일자가 10/12입니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "SI14QNwiWObrGgKv",
+      "tokens": 45208,
+      "replCalls": 5,
+      "wallMs": 17948,
+      "done": true,
+      "tail": "- 10.11: 0 / 10.10: 0 / 10.09: 0 / 10.08: 0 / 10.07: 0 / 10.06: 0  최근 7일간(10.06~10.12) 일별 방문자 수는 모두 0명입니다. 참고로 9.28~10.05 구간도 테이블에서 전부 0으로 확인됐습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "vazbeHmXKCycxoYv",
+      "tokens": 48467,
+      "replCalls": 9,
+      "wallMs": 17955,
+      "done": true,
+      "tail": "- 10.06(화): 0명  참고로 순방문자수는 하루 지연 집계라 최신일이 10.12이고, 그 이전 9.28 이후 전체 기간 모두 0명입니다. 피이웃/서로이웃/기타 구분도 전부 0. 즉 오늘 포함 최근 7일간 방문자 기록이 전무합니다.\u001b[0m"
+    }
+  ]
+}

@@ -765,17 +765,23 @@ export async function emitSkill(home, accountRoot, host, opts = {}) {
 
   // imperative script, not prose: effort-off models follow literal STEP
   // lines far better than a paragraph of advice. A shortcut only counts
-  // when it is openable (literal, not "/", not a template).
+  // when it is openable (literal, not "/", not a template). Steps are
+  // written as ONE repl call wherever possible — each call costs the
+  // model a full round-trip, so batching is the largest wall-time lever
+  // a skill can pull.
   const goodRoute = (mem.routes || []).find((r) => r.shortcut && r.shortcut !== "/" && !/[{}]/.test(r.shortcut));
   const hasShortcut = !!goodRoute;
   const steps = [];
   if (hasShortcut)
-    steps.push(`STEP 1: run await openTab('${origin}${goodRoute.shortcut}') and snapshot the page.`);
+    steps.push(`STEP 1: in ONE repl call run const p = await openTab('${origin}${goodRoute.shortcut}'); console.log(p.url()); console.log((await snapshot(p,{interactive:true})).tree); and read the answer from that output.`);
   else
     steps.push(`STEP 1: open ${origin} and navigate to the page that fits the task.`);
   if (topHint)
     steps.push(`STEP ${steps.length + 1}: ${dataHintLine}`);
-  steps.push(`STEP ${steps.length + 1}: read the answer from the first snapshot. If the page title or path does not match the task, navigate normally.`);
+  if (hasShortcut)
+    steps.push(`STEP ${steps.length + 1}: only if the STEP-1 page title or path did not match the task, navigate normally; never spend a second call re-reading the same page.`);
+  else
+    steps.push(`STEP ${steps.length + 1}: read the answer from the first snapshot. If the page title or path does not match the task, navigate normally.`);
   const skillBody = steps.length > 1 || topHint
     ? steps.join(" ") + ` Values in the URL (order id, recipient, date) come only from the current request — never from memory. No second verification pass when the first snapshot already shows the answer. Marker ${marker}: cite only if you actually used this skill.`
     : `Nothing reusable is saved for ${host} yet — navigate normally.`;

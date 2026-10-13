@@ -1,0 +1,33 @@
+{
+  "task": "youtube-top-video",
+  "host": "www.youtube.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "FHS0FlGAfdYSyaDV",
+      "tokens": 44471,
+      "replCalls": 4,
+      "wallMs": 13515,
+      "done": true,
+      "tail": "- **조회수**: 약 60억 회 (60억뷰, 업로드 14년 전)  검색 결과 목록 기준이며, 이 영상이 나머지 결과(최대 8.5억 회 수준)보다 압도적으로 많습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "J5S5YV5Wd0Faf1qK",
+      "tokens": 41220,
+      "replCalls": 2,
+      "wallMs": 17442,
+      "done": true,
+      "tail": "**PSY - GANGNAM STYLE(강남스타일) M/V** / 채널: **officialpsy** / 조회수: **60억** (약 14년 전 업로드, 검색결과 1위)  - 요청대로 openTab으로 youtube.com 탭 2개를 열었다가 모두 닫았고, 이후 새 탭에서 검색만 했습니다 (재생/댓글 없음).\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "7BjNK1Ya8syrQuw4",
+      "tokens": 41119,
+      "replCalls": 3,
+      "wallMs": 20573,
+      "done": true,
+      "tail": "- **제목:** PSY - GANGNAM STYLE(강남스타일) M/V - **채널:** officialpsy (공식 아티스트 채널) - **조회수:** 60억 (약 14년 전 업로드)\u001b[0m"
+    }
+  ]
+}

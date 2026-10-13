@@ -1,0 +1,33 @@
+{
+  "task": "coupang-tracking",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "6r2F96gpLgtj6Abx",
+      "tokens": 58164,
+      "replCalls": 7,
+      "wallMs": 53231,
+      "done": true,
+      "tail": "- 송장번호: 10332324726846  참고로 요청하신 mc.coupang.com / www.coupang.com 탭 2개는 열어 확인한 뒤 모두 닫았고, 배송조회 확인 외 어떤 신청(주문·변경·취소·반품)도 하지 않았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "Vv1KSId03CrYvTdw",
+      "tokens": 72526,
+      "replCalls": 38,
+      "wallMs": 124906,
+      "done": true,
+      "tail": "- 운송장(송장) 번호: **10332324726846**  배송 상태: 배송완료 (10/11(일) 도착, 10월 11일 01:08 일산4 배송완료 처리). 참고로 주문목록 진입 시 www.coupang.com/np/orders는 301 오류로 접근이 안 돼서 mc.coupang.com 경유로 상세 페이지에 진입했고, 주문 조회만 하고 아무 변경·신청 작업은 하지 않았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "BNTUAkKK8UHeB20u",
+      "tokens": 55804,
+      "replCalls": 9,
+      "wallMs": 27389,
+      "done": true,
+      "tail": "- 배송상태: 배송완료 (10/11 01:08 일산4)  참고: 안내하신 대로 `mc.coupang.com`과 `coupang.com` 탭을 새로 열어 확인 후 모두 닫았고, 주문목록에서 상품의 \"배송 조회\" 화면에서 정보를 확인했습니다. 주문·변경·취소·반품 등의 조작은 일절 하지 않았습니다.\u001b[0m"
+    }
+  ]
+}

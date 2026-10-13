@@ -1,0 +1,33 @@
+{
+  "task": "google-scholar-paper",
+  "host": "scholar.google.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "wKMtS1mYdnqskN6I",
+      "tokens": 44609,
+      "replCalls": 9,
+      "wallMs": 338292,
+      "done": true,
+      "tail": "첫 번째 저자: Ashish Vaswani   발표 연도: 2017   인용 횟수: 275,368회\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "kRCkYmHtRU9H2T9V",
+      "tokens": 0,
+      "replCalls": 3,
+      "wallMs": 72637,
+      "done": true,
+      "tail": "- **인용 횟수:** 275,368회 인용  [TRAIL-24B5D1]\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "GAY0uYa5DzAPOjNm",
+      "tokens": 0,
+      "replCalls": 3,
+      "wallMs": 49568,
+      "done": true,
+      "tail": "- 첫 번째 저자: **A. Vaswani** (Ashish Vaswani) - 발표 연도: **2017** - 인용 횟수: **275,368회 인용**\u001b[0m"
+    }
+  ]
+}
