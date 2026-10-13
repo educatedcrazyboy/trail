@@ -985,13 +985,25 @@ export async function syncAsideMemory(home, accountRoot) {
       "",
     ].join("\n");
     await fs.writeFile(siteFile, body);
-    // index row: one short line per worth-while site — the shortcut and,
-    // when known, the exact expression that reads the data. No trailing
-    // file pointer: the header already names the per-site path pattern.
+    // index row: one short line per worth-while site — the shortcut, the
+    // deeper destinations each route ends at (they are what the agent
+    // actually needs once the shortcut only reaches the listing page),
+    // and, when known, the exact expression that reads the data. No
+    // trailing file pointer: the header names the per-site path pattern,
+    // and in practice agents never open it — the index IS the channel.
+    const destinations = [...new Set(
+      (mem.routes || [])
+        .map((r) => (r.steps || []).filter((s) => s && s !== "/"))
+        .flat()
+        .concat((mem.routes || []).map((r) => r.steps?.[r.steps.length - 1]).filter(Boolean))
+    )]
+      .filter((s) => s !== first?.shortcut)
+      .slice(-4);
     entries.push({
       ts: mem.updatedAt || "",
       line:
         `- ${mem.host} → ${first?.shortcut || Object.keys(mem.pages || {})[0] || "/"}` +
+        (destinations.length ? ` · also: ${destinations.join(", ")}` : "") +
         (topHint ? ` · ${hintRead(topHint.source)}` : ""),
     });
   }
