@@ -1,0 +1,33 @@
+{
+  "task": "google-scholar-paper",
+  "host": "scholar.google.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "kiIyxYW7HvMVPKf7",
+      "tokens": 41689,
+      "replCalls": 3,
+      "wallMs": 7838,
+      "done": true,
+      "tail": "- 인용 횟수: 약 275,368회  조회만 하고 탭은 모두 닫았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "2qE7ffusqMG2WF8h",
+      "tokens": 44633,
+      "replCalls": 3,
+      "wallMs": 12721,
+      "done": true,
+      "tail": "- 인용 횟수: 약 275,368회 (Google Scholar, 조회 시점 기준)  탭은 모두 닫았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "iBfdDGknLfCZBo1e",
+      "tokens": 42763,
+      "replCalls": 4,
+      "wallMs": 22426,
+      "done": true,
+      "tail": "- **인용 횟수**: 275,368회 (조회 시점 기준, \"전체 26개의 버전\" 중 원문 기준)  조건대로 openTab으로 scholar.google.com을 새 탭에서 열어 검색했고, 조회만 하고 모든 탭을 닫은 상태로 마무리했습니다.\u001b[0m"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "task": "coupang-tracking",
+  "host": "mc.coupang.com",
+  "results": [
+    {
+      "scenario": "cold",
+      "session": "t9I5RiDIBuLSOJSV",
+      "tokens": 54180,
+      "replCalls": 13,
+      "wallMs": 51418,
+      "done": true,
+      "tail": "- 배송 상태: 배송완료 — 2026-10-11 01:08 일산4 배송완료  주문 상세 페이지에선 운송장이 바로 안 보여 \"배송 조회\"를 펼쳐 확인했고, 상세보기 → 배송 조회까지 새 탭에서만 진행했고 주문·변경·취소·반품은 건드리지 않았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-on",
+      "session": "udIQ9QgE9lsa3oxR",
+      "tokens": 65398,
+      "replCalls": 23,
+      "wallMs": 47853,
+      "done": true,
+      "tail": "- 배송상태: 배송완료 (10/11 일 01:08, 일산4에서 출발 후 당일 완료)  과정: mc.coupang.com과 coupang.com을 openTab으로 열었다가 닫은 뒤, 새 탭으로 주문목록 → 10/10 주문의 상세보기 → 배송조회 팝업에서 송장번호를 확인했습니다. 쿠팡 탭은 모두 닫았고, 주문/변경/취소/반품 등은 일절 건드리지 않았습니다.\u001b[0m"
+    },
+    {
+      "scenario": "trail-off",
+      "session": "NekKpB8PHrpxifYO",
+      "tokens": 56179,
+      "replCalls": 7,
+      "wallMs": 25490,
+      "done": true,
+      "tail": "- 운송장(송장) 번호: **10332324726846**  모든 탭은 닫았고, 주문·변경·취소·반품 동작은 하지 않았습니다.\u001b[0m"
+    }
+  ]
+}

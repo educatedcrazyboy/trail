@@ -999,11 +999,18 @@ export async function syncAsideMemory(home, accountRoot) {
     )]
       .filter((s) => s !== first?.shortcut)
       .slice(-4);
+    // {name} inside a destination is a URL hole, not a label: spell out
+    // that it must be substituted with the value from the current page
+    // (order list row, etc.) — muse-class models otherwise treat it as
+    // decoration and fall back to DOM click loops.
+    const destText = destinations
+      .map((d) => (/[{}]/.test(d) ? `${d} (fill {} then open)` : d))
+      .join(", ");
     entries.push({
       ts: mem.updatedAt || "",
       line:
         `- ${mem.host} → ${first?.shortcut || Object.keys(mem.pages || {})[0] || "/"}` +
-        (destinations.length ? ` · also: ${destinations.join(", ")}` : "") +
+        (destText ? ` · also: ${destText}` : "") +
         (topHint ? ` · ${hintRead(topHint.source)}` : ""),
     });
   }
