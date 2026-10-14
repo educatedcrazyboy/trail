@@ -95,3 +95,38 @@ Lead command returned exit 0 with LEAD_CLEANUP_OK and
 BOOTSTRAP_CLEANUP_OK. /tmp/trail-fairness-lead.CqXLRN and the empty
 bootstrap tmp.GVVHpDUXTj directory are absent. Producer/verifier own
 temporary cleanup receipts are in their respective reports.
+
+## Scope update from user
+User cannot supply an Aside source/API for memory isolation and explicitly
+requested: keep live refusal; prepare inquiry requirements; continue historical
+session analysis and local verification. Full isolation implementation and live
+QA are deferred by that instruction, not passed or claimed complete.
+docs/audit/aside-isolation-requirements.md is a handoff draft, not a sent message.
+Web retrieval did not return the official memory page body; its description
+is attributed to user research, not independent web verification.
+
+## Offline QA resource
+Owned root /tmp/trail-offline.sjnzJF allocated for final regression and
+13 historical-session measurements. No provider/browser session is started.
+Cleanup required after command completion.
+
+## Offline results
+13 historical measurements completed, no provider calls.
+Regression monitor mon_BMMBJNQB87CN3QCR: 21 pass, 0 fail, exit 0.
+Latest comparison final-message model metadata (12) and r6 final message (1)
+all report opengateway/z-ai/glm-5.3-flash-ultrafast, not requested Muse.
+Historical source f2461fa parses --model only; recorded bench commands
+passed -m, so no model was forwarded in that path.
+Keyword false negatives manually checked: Coupang uses 송장번호 instead of
+운송장; YouTube uses GANGNAM instead of case-sensitive Gangnam.
+Do not label these four false heuristic values actual task failures.
+No code or tests were changed during this offline documentation phase.
+
+## Offline completion and cleanup
+Final diff whitespace check passed. Owned /tmp/trail-offline.sjnzJF
+removed after checks; command returned OFFLINE_CLEANUP_OK with exit 0.
+No owned provider/browser process was started. User's settings window
+was not closed or restored because it is user-owned.
+Current deliverable: inquiry requirements plus corrected historical
+analysis, with live blocking preserved. Full isolation is explicitly
+deferred by latest user instruction, not implemented or verified.
