@@ -1,0 +1,198 @@
+{
+  "schema": "trail-local-fixtures/1",
+  "synthetic": true,
+  "tasks": [
+    {
+      "id": "shipment",
+      "title": "Shipment lookup",
+      "entry": "/t/shipment/index",
+      "shortcut": "/t/shipment/detail",
+      "truth": {
+        "tracking": "TRK-4821",
+        "status": "Delivered",
+        "carrier": "Northwind Freight",
+        "delivered_on": "2026-03-14"
+      },
+      "oracle": {
+        "sourcePath": "/t/shipment/detail",
+        "evidenceFields": [
+          "tracking",
+          "status",
+          "carrier",
+          "delivered_on"
+        ]
+      },
+      "solver": {
+        "patterns": {
+          "tracking": "^Summary:.*?\\btracking=([^;\\n]+)",
+          "status": "^Summary:.*?\\bstatus=([^;\\n]+)",
+          "carrier": "^Summary:.*?\\bcarrier=([^;\\n]+)",
+          "delivered_on": "^Summary:.*?\\bdelivered_on=([^;\\n]+)"
+        },
+        "quotePattern": "^Summary:.*$",
+        "decoyQuote": "Previous status: In transit (stale snapshot)"
+      },
+      "resources": {
+        "/t/shipment/index": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Shipment lookup portal\nnext: /t/shipment/list"
+        },
+        "/t/shipment/list": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Shipment lookup results (3 items)\nnext: /t/shipment/detail"
+        },
+        "/t/shipment/detail": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Shipment lookup record\nPrevious status: In transit (stale snapshot)\nSummary: tracking=TRK-4821; status=Delivered; carrier=Northwind Freight; delivered_on=2026-03-14\nNote: carrier=Harbor Lines handled an earlier leg"
+        }
+      }
+    },
+    {
+      "id": "stats",
+      "title": "Statistics table",
+      "entry": "/t/stats/index",
+      "shortcut": "/t/stats/detail",
+      "truth": {
+        "dataset": "Regional Rainfall 2024",
+        "region": "Northern Plateau",
+        "year": "2024",
+        "median_mm": "812"
+      },
+      "oracle": {
+        "sourcePath": "/t/stats/detail",
+        "evidenceFields": [
+          "dataset",
+          "region",
+          "year",
+          "median_mm"
+        ]
+      },
+      "solver": {
+        "patterns": {
+          "dataset": "^Summary:.*?\\bdataset=([^;\\n]+)",
+          "region": "^Summary:.*?\\bregion=([^;\\n]+)",
+          "year": "^Summary:.*?\\byear=([^;\\n]+)",
+          "median_mm": "^Summary:.*?\\bmedian_mm=([^;\\n]+)"
+        },
+        "quotePattern": "^Summary:.*$",
+        "decoyQuote": "Mean: mean_mm=847 (not the requested statistic)"
+      },
+      "resources": {
+        "/t/stats/index": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Statistics table portal\nnext: /t/stats/list"
+        },
+        "/t/stats/list": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Statistics table results (3 items)\nnext: /t/stats/detail"
+        },
+        "/t/stats/detail": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Statistics table record\nMean: mean_mm=847 (not the requested statistic)\nSummary: dataset=Regional Rainfall 2024; region=Northern Plateau; year=2024; median_mm=812\nNote: region=Coastal Belt is a different table"
+        }
+      }
+    },
+    {
+      "id": "paper",
+      "title": "Paper metadata",
+      "entry": "/t/paper/index",
+      "shortcut": "/t/paper/detail",
+      "truth": {
+        "title": "Sparse Lattice Routing",
+        "first_author": "Imani Okafor",
+        "year": "2022",
+        "venue": "Journal of Synthetic Systems"
+      },
+      "oracle": {
+        "sourcePath": "/t/paper/detail",
+        "evidenceFields": [
+          "title",
+          "first_author",
+          "year",
+          "venue"
+        ]
+      },
+      "solver": {
+        "patterns": {
+          "title": "^Summary:.*?\\btitle=([^;\\n]+)",
+          "first_author": "^Summary:.*?\\bfirst_author=([^;\\n]+)",
+          "year": "^Summary:.*?\\byear=([^;\\n]+)",
+          "venue": "^Summary:.*?\\bvenue=([^;\\n]+)"
+        },
+        "quotePattern": "^Summary:.*$",
+        "decoyQuote": "Cited by: Okafor-Lee preprint (2024)"
+      },
+      "resources": {
+        "/t/paper/index": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Paper metadata portal\nnext: /t/paper/list"
+        },
+        "/t/paper/list": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Paper metadata results (3 items)\nnext: /t/paper/detail"
+        },
+        "/t/paper/detail": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Paper metadata record\nCited by: Okafor-Lee preprint (2024)\nSummary: title=Sparse Lattice Routing; first_author=Imani Okafor; year=2022; venue=Journal of Synthetic Systems\nNote: venue=Workshop Proceedings hosted an earlier draft"
+        }
+      }
+    },
+    {
+      "id": "video",
+      "title": "Video page",
+      "entry": "/t/video/index",
+      "shortcut": "/t/video/detail",
+      "truth": {
+        "title": "Brewing Ratios Explained",
+        "channel": "Fixture Kitchen",
+        "duration": "12:34",
+        "published": "2025-06-02"
+      },
+      "oracle": {
+        "sourcePath": "/t/video/detail",
+        "evidenceFields": [
+          "title",
+          "channel",
+          "duration",
+          "published"
+        ]
+      },
+      "solver": {
+        "patterns": {
+          "title": "^Summary:.*?\\btitle=([^;\\n]+)",
+          "channel": "^Summary:.*?\\bchannel=([^;\\n]+)",
+          "duration": "^Summary:.*?\\bduration=([^;\\n]+)",
+          "published": "^Summary:.*?\\bpublished=([^;\\n]+)"
+        },
+        "quotePattern": "^Summary:.*$",
+        "decoyQuote": "Related: Brewing Myths Debunked (length 08:10)"
+      },
+      "resources": {
+        "/t/video/index": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Video page portal\nnext: /t/video/list"
+        },
+        "/t/video/list": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Video page results (3 items)\nnext: /t/video/detail"
+        },
+        "/t/video/detail": {
+          "type": "text/plain",
+          "tokens": 50,
+          "body": "Video page record\nRelated: Brewing Myths Debunked (length 08:10)\nSummary: title=Brewing Ratios Explained; channel=Fixture Kitchen; duration=12:34; published=2025-06-02\nNote: channel=Other Kitchen reposted this video"
+        }
+      }
+    }
+  ]
+}

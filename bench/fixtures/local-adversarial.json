@@ -1,0 +1,294 @@
+{
+  "schema": "trail-local-adversarial/1",
+  "scenarios": [
+    {
+      "id": "too_many_calls",
+      "kind": "chain",
+      "entry": "/adv/chain/0",
+      "expect": "budget_exceeded",
+      "expectRequests": "maxCallsPerArm",
+      "resources": {
+        "/adv/chain/0": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 0\nnext: /adv/chain/1"
+        },
+        "/adv/chain/1": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 1\nnext: /adv/chain/2"
+        },
+        "/adv/chain/2": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 2\nnext: /adv/chain/3"
+        },
+        "/adv/chain/3": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 3\nnext: /adv/chain/4"
+        },
+        "/adv/chain/4": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 4\nnext: /adv/chain/5"
+        },
+        "/adv/chain/5": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 5\nnext: /adv/chain/6"
+        },
+        "/adv/chain/6": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 6\nnext: /adv/chain/7"
+        },
+        "/adv/chain/7": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 7\nnext: /adv/chain/8"
+        },
+        "/adv/chain/8": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 8\nnext: /adv/chain/9"
+        },
+        "/adv/chain/9": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 9\nnext: /adv/chain/10"
+        },
+        "/adv/chain/10": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 10\nnext: /adv/chain/11"
+        },
+        "/adv/chain/11": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 11\nnext: /adv/chain/12"
+        },
+        "/adv/chain/12": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 12\nnext: /adv/chain/13"
+        },
+        "/adv/chain/13": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 13\nnext: /adv/chain/14"
+        },
+        "/adv/chain/14": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 14\nnext: /adv/chain/15"
+        },
+        "/adv/chain/15": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 15\nnext: /adv/chain/16"
+        },
+        "/adv/chain/16": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 16\nnext: /adv/chain/17"
+        },
+        "/adv/chain/17": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 17\nnext: /adv/chain/18"
+        },
+        "/adv/chain/18": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 18\nnext: /adv/chain/19"
+        },
+        "/adv/chain/19": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 19\nnext: /adv/chain/20"
+        },
+        "/adv/chain/20": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 20\nnext: /adv/chain/21"
+        },
+        "/adv/chain/21": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 21\nnext: /adv/chain/22"
+        },
+        "/adv/chain/22": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 22\nnext: /adv/chain/23"
+        },
+        "/adv/chain/23": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 23\nnext: /adv/chain/24"
+        },
+        "/adv/chain/24": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 24\nnext: /adv/chain/25"
+        },
+        "/adv/chain/25": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 25\nnext: /adv/chain/26"
+        },
+        "/adv/chain/26": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 26\nnext: /adv/chain/27"
+        },
+        "/adv/chain/27": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 27\nnext: /adv/chain/28"
+        },
+        "/adv/chain/28": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 28\nnext: /adv/chain/29"
+        },
+        "/adv/chain/29": {
+          "type": "text/plain",
+          "tokens": 10,
+          "body": "Page 29"
+        }
+      }
+    },
+    {
+      "id": "oversized_response",
+      "kind": "stream",
+      "entry": "/adv/big",
+      "expect": "response_too_large",
+      "expectRequests": 1,
+      "resources": {
+        "/adv/big": {
+          "mode": "stream",
+          "bytes": 16777216,
+          "tokens": 10
+        }
+      }
+    },
+    {
+      "id": "never_answers",
+      "kind": "hang",
+      "entry": "/adv/hang",
+      "expect": "deadline_exceeded",
+      "expectRequests": 1,
+      "resources": {
+        "/adv/hang": {
+          "mode": "hang"
+        }
+      }
+    },
+    {
+      "id": "unknown_usage",
+      "kind": "no_usage",
+      "entry": "/adv/nousage/0",
+      "expect": "usage_unknown",
+      "expectRequests": 1,
+      "resources": {
+        "/adv/nousage/0": {
+          "type": "text/plain",
+          "tokens": null,
+          "body": "No telemetry\nnext: /adv/nousage/1"
+        },
+        "/adv/nousage/1": {
+          "type": "text/plain",
+          "tokens": null,
+          "body": "No telemetry"
+        }
+      }
+    },
+    {
+      "id": "token_ceiling",
+      "kind": "chain_tokens",
+      "entry": "/adv/tok/0",
+      "expect": "token_ceiling_stop",
+      "expectRequests": 2,
+      "resources": {
+        "/adv/tok/0": {
+          "type": "text/plain",
+          "tokens": 600,
+          "body": "Page 0\nnext: /adv/tok/1"
+        },
+        "/adv/tok/1": {
+          "type": "text/plain",
+          "tokens": 600,
+          "body": "Page 1\nnext: /adv/tok/2"
+        },
+        "/adv/tok/2": {
+          "type": "text/plain",
+          "tokens": 600,
+          "body": "Page 2\nnext: /adv/tok/3"
+        },
+        "/adv/tok/3": {
+          "type": "text/plain",
+          "tokens": 600,
+          "body": "Page 3"
+        }
+      }
+    },
+    {
+      "id": "malformed_answer",
+      "kind": "fault",
+      "fault": "malformed",
+      "expect": "malformed_response",
+      "expectRequests": 3
+    },
+    {
+      "id": "wrong_answer",
+      "kind": "fault",
+      "fault": "wrong_answer",
+      "expect": "wrong_answer",
+      "expectRequests": 3
+    },
+    {
+      "id": "missing_source",
+      "kind": "fault",
+      "fault": "drop_source",
+      "expect": "missing_source",
+      "expectRequests": 3
+    },
+    {
+      "id": "fabricated_quote",
+      "kind": "fault",
+      "fault": "fake_quote",
+      "expect": "quote_not_in_source",
+      "expectRequests": 3
+    },
+    {
+      "id": "unfetched_source",
+      "kind": "fault",
+      "fault": "unfetched_source",
+      "expect": "source_not_fetched",
+      "expectRequests": 3
+    },
+    {
+      "id": "decoy_quote",
+      "kind": "fault",
+      "fault": "decoy_quote",
+      "expect": "quote_missing_value",
+      "expectRequests": 3
+    },
+    {
+      "id": "wrong_source_page",
+      "kind": "fault",
+      "fault": "wrong_page",
+      "expect": "wrong_source_page",
+      "expectRequests": 3
+    },
+    {
+      "id": "whole_body_quote",
+      "kind": "fault",
+      "fault": "whole_body",
+      "expect": "quote_too_broad",
+      "expectRequests": 3
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "schema": "trail-local-protocol/1",
+  "runner": {
+    "path": "bench/local.mjs",
+    "sha256": "9726902e16c51bebac69d3f32715028e8a35f416dfc942f84b769d816bfaa9f8"
+  },
+  "note": "Preregistered before any action. Deterministic local mock; makes no claim about AI, browser, runtime, fairness, or performance.",
+  "model": {
+    "id": "fixture/local-model",
+    "effort": "not applicable",
+    "invoked": false
+  },
+  "fixtures": {
+    "local": {
+      "path": "bench/fixtures/local.json",
+      "sha256": "6e2a6f727ceaf5fc91f54b73b2f9d8ccf7bb215e3e3e4df76d5755c9771ff9aa"
+    },
+    "adversarial": {
+      "path": "bench/fixtures/local-adversarial.json",
+      "sha256": "ef907fd6ba7d20bb0d27abfaa1c372a6c12896ac38bb7193f4421a8859656120"
+    }
+  },
+  "oracle": {
+    "path": "bench/local-oracle.mjs",
+    "sha256": "078b9a46a4ecac1344447fbf263dec57c5c5c74e5a76b51c34bac74007cc88b9"
+  },
+  "tasks": {
+    "shipment": "2c68729ed86e4d057b239812f99f5bb1f0d872140c649b1bc1db75b432328ede",
+    "stats": "c77d0ae56df2023c608cab6f5b2519f1d8ca41c80025c4b88d02148bac9e378e",
+    "paper": "6e3a32db9c9ae7bd52666c2abf9500d7ae2684f27ad0e074b8ec43cada6adc37",
+    "video": "e1441ee01adad083da20b445851ee1e16a4852539dfed3a989da0fd8f93d3e32"
+  },
+  "treatment": {
+    "id": "synthetic-route-shortcut",
+    "route": "direct fetch of the task detail resource, skipping the index and list pages",
+    "emittedByTrail": false,
+    "label": "synthetic policy, not measured Trail advantage",
+    "sha256": "f0e844427da3227c5ced74c03731810299567f0a6c6851ae8eb9def8ef615522"
+  },
+  "conditions": {
+    "cold": {
+      "route": "navigation"
+    },
+    "trail-on": {
+      "route": "shortcut"
+    },
+    "trail-off": {
+      "route": "navigation"
+    }
+  },
+  "schedule": {
+    "orders": [
+      [
+        "cold",
+        "trail-on",
+        "trail-off"
+      ],
+      [
+        "cold",
+        "trail-off",
+        "trail-on"
+      ],
+      [
+        "trail-on",
+        "cold",
+        "trail-off"
+      ],
+      [
+        "trail-on",
+        "trail-off",
+        "cold"
+      ],
+      [
+        "trail-off",
+        "cold",
+        "trail-on"
+      ],
+      [
+        "trail-off",
+        "trail-on",
+        "cold"
+      ]
+    ],
+    "armsPerOrder": 3,
+    "tasksPerArm": 4
+  },
+  "limits": {
+    "maxCallsPerArm": 12,
+    "maxCallsTotal": 260,
+    "maxResponseBytes": 65536,
+    "armWallMs": 1500,
+    "totalWallMs": 60000,
+    "requireObservedTokens": true,
+    "observedTokenCeilingPerArm": 1000
+  },
+  "rules": {
+    "armFailure": "An arm fails on any dispatch error (budget, size, deadline, usage, ceiling, transport, status) or any oracle reason on any of its four tasks; a failed arm is never retried.",
+    "oracle": "Exact answer fields plus the complete unique Summary line fetched from the authoritative detail page; semicolon-separated field=value entries must parse to exactly the evidence keys and truth values, with no duplicates or conflicting fields.",
+    "aggregation": "Per condition: arms passed of arms run, summed calls and summed synthetic tokens. Descriptive counts only; no comparison between conditions is a result.",
+    "exit": "0 only if all 18 arms pass, every adversarial scenario is rejected with its expected code and request count, cleanup is clean, and before.json is unchanged; otherwise 2.",
+    "reuse": "An existing output path is refused."
+  }
+}
