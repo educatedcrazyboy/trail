@@ -13,9 +13,12 @@ import {
 
 const USAGE = `Local-only benchmark preparation (no provider or browser calls)
 node bench/prepare.mjs prepare --training-session <messages.jsonl> --model <provider/model> --effort <value> --out <NEW owned directory>
-node bench/prepare.mjs verify <directory>
+node bench/prepare.mjs verify <directory> [--expected-manifest-sha256 <64 hex>]
 node bench/prepare.mjs --help
 PASS means local preparation only; runtimeIsolation: unverified, liveAllowed: false.
+Unpinned verify checks local internal consistency ONLY (a coherent rewrite of manifest and
+artifacts passes). Authenticity needs --expected-manifest-sha256, a manifestSha256 recorded
+OUTSIDE the editable bundle when it was prepared; it binds the exact raw manifest.json bytes.
 Output parent must exist and be owned by this user (or the OS temporary root).
 No reuse, symlink components, path traversal, or live-isolation bypass is accepted.`;
 const CONDITIONS = ["cold", "trail-on", "trail-off"];
@@ -172,11 +175,19 @@ function validateSettings(model, effort) {
   check(typeof effort === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(effort), "explicit effort required");
 }
 
-export async function verify(directory) {
+export async function verify(directory, { expectedManifestSha256 } = {}) {
   const out = await safePath(directory);
   const all = await inventory(out);
   check(all.some((e) => e.path === "manifest.json" && e.type === "file"), "manifest missing");
-  const manifest = JSON.parse(await fs.readFile(path.join(out, "manifest.json"), "utf8"));
+  const manifestBytes = await fs.readFile(path.join(out, "manifest.json"));
+  const manifestSha256 = hash(manifestBytes);
+  const pinned = expectedManifestSha256 !== undefined;
+  if (pinned) {
+    check(typeof expectedManifestSha256 === "string" && /^[a-f0-9]{64}$/.test(expectedManifestSha256),
+      "expected manifest sha256 must be 64 lowercase hex characters");
+    check(manifestSha256 === expectedManifestSha256, "manifest does not match the externally pinned sha256");
+  }
+  const manifest = JSON.parse(manifestBytes.toString("utf8"));
   check(manifest && typeof manifest === "object", "malformed manifest");
   validateSettings(manifest.model, manifest.effort);
   check(manifest.training && /^[a-f0-9]{64}$/.test(manifest.training.sha256) &&
@@ -216,8 +227,28 @@ export async function verify(directory) {
   check(isDeepStrictEqual(all.map(({ path: p, type }) => ({ path: p, type })), unique),
     "unexpected or missing preparation files");
   return { status: "PASS", mode: "local-preparation", runtimeIsolation: "unverified",
-    liveAllowed: false, frozenSha256: expected.frozen.sha256, arms: expected.arms.length,
+    liveAllowed: false, manifestSha256, pinned,
+    authenticity: pinned ? "manifest-bytes-match-external-pin" : "local-internal-integrity-only",
+    frozenSha256: expected.frozen.sha256, arms: expected.arms.length,
     cleanup: { temporaryRootsCreated: 0, cacheCreated: false } };
+}
+
+// A trailing lifecycle row is accepted only as one observed `finished` envelope
+// (exactly role/event/turnId/timestamp) closing the same turn that the latest
+// `started` row opened, directly after the answer. Anything else stays rejected.
+function completedAnswer(messages) {
+  const last = messages.at(-1);
+  if (last?.role !== "turn-lifecycle") return last;
+  const keys = Object.keys(last).sort().join(",");
+  check(keys === "event,role,timestamp,turnId" && last.event === "finished" &&
+    typeof last.turnId === "string" && last.turnId, "unsupported trailing lifecycle record");
+  const started = messages.findLastIndex((m) => m?.role === "turn-lifecycle" && m.event === "started");
+  if (started >= 0) {
+    check(messages[started].turnId === last.turnId, "lifecycle turn mismatch");
+    check(!messages.slice(started + 1, -1).some((m) => m?.role === "turn-lifecycle"),
+      "unexpected lifecycle record inside turn");
+  }
+  return messages.at(-2);
 }
 
 export async function prepare(options) {
@@ -234,7 +265,7 @@ export async function prepare(options) {
   check(inputStat.isFile() && inputStat.nlink === 1, "training must be a regular, non-hardlinked file");
   const raw = await fs.readFile(input);
   const messages = raw.toString("utf8").split("\n").filter((s) => s.trim()).map((s) => JSON.parse(s));
-  const final = messages.at(-1);
+  const final = completedAnswer(messages);
   check(final?.role === "assistant" && Array.isArray(final.content) &&
     final.content.some((c) => c.type === "text" && c.text?.trim()) &&
     !final.content.some((c) => c.type === "toolCall" || c.type === "tool_call") &&
@@ -294,8 +325,10 @@ export async function main(argv) {
   if (argv.length === 1 && argv[0] === "--help") return { help: USAGE,
     runtimeIsolation: "unverified", liveAllowed: false };
   if (argv[0] === "verify") {
-    check(argv.length === 2 && !argv[1].startsWith("--"), "verify requires one directory");
-    return verify(argv[1]);
+    const pin = argv[2] === "--expected-manifest-sha256";
+    check(!argv[1]?.startsWith("--") && (argv.length === 2 || (argv.length === 4 && pin)),
+      "verify requires one directory and optional --expected-manifest-sha256 <64 hex>");
+    return verify(argv[1], pin ? { expectedManifestSha256: argv[3] } : {});
   }
   check(argv[0] === "prepare", USAGE);
   const options = {};

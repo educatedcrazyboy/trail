@@ -249,3 +249,76 @@ test("CLI help, strict arguments and real create/verify keep the user's home unu
     await assert.rejects(main(argv));
   }
 });
+
+const fin = (turnId = "t1", extra = {}) => JSON.stringify({ role: "turn-lifecycle", event: "finished", turnId, timestamp: 1, ...extra });
+const started = (turnId) => JSON.stringify({ role: "turn-lifecycle", event: "started", turnId, timestamp: 1 });
+
+test("a trailing successful finished lifecycle row after the answer is accepted; other trailers are not", async (t) => {
+  const f = await fixture(t);
+  const base = (await fs.readFile(FIXTURE, "utf8")).trimEnd();
+  const training = path.join(f.root, "lifecycle.jsonl");
+  const bad = [
+    fin("t2"), fin("t1", { status: "error" }), fin("t1", { event: "aborted" }),
+    JSON.stringify({ role: "turn-lifecycle", event: "finished", timestamp: 1 }),
+    JSON.stringify({ role: "turn-lifecycle", event: "weird", turnId: "t1", timestamp: 1 }),
+    JSON.stringify({ role: "mystery", turnId: "t1" }), "{", started("t2"),
+    fin("t1") + "\n" + started("t2"), fin("t1") + "\n" + fin("t1"),
+    started("t1") + "\n" + fin("t1"),
+  ];
+  for (const tail of bad) {
+    await fs.writeFile(training, base + "\n" + tail + "\n");
+    await assert.rejects(prepare({ ...f.options, "training-session": training }), undefined, tail);
+    await assert.rejects(fs.lstat(f.out), { code: "ENOENT" });
+  }
+  await fs.writeFile(training, base + "\n" + fin() + "\n");
+  const result = await prepare({ ...f.options, "training-session": training });
+  assert.equal(result.status, "PASS");
+  assert.equal(result.liveAllowed, false);
+});
+
+test("pinned verify binds exact manifest bytes; coherent replacement passes only unpinned", async (t) => {
+  const f = await prepared(t);
+  const pin = f.result.manifestSha256;
+  assert.match(pin, /^[a-f0-9]{64}$/);
+  const bytes = await fs.readFile(path.join(f.out, "manifest.json"));
+  assert.equal(pin, sha(bytes));
+  const ok = await verify(f.out, { expectedManifestSha256: pin });
+  assert.equal(ok.pinned, true);
+  assert.equal(ok.liveAllowed, false);
+  const plain = await verify(f.out);
+  assert.equal(plain.pinned, false);
+  assert.equal(plain.authenticity, "local-internal-integrity-only");
+  assert.equal(plain.liveAllowed, false);
+  for (const bad of ["", "abc", pin.toUpperCase(), "0".repeat(64)]) {
+    await assert.rejects(verify(f.out, { expectedManifestSha256: bad }));
+  }
+  // Coherent attacker rewrite: edit a trail-on arm AND frozen skill together, rebuild manifest.
+  const rel = f.manifest.treatmentAllowlist[1];
+  const target = path.join(f.out, "frozen/account", rel);
+  await fs.appendFile(target, "\nforged");
+  for (const arm of f.manifest.arms.filter((a) => a.condition === "trail-on")) {
+    await fs.copyFile(target, path.join(f.out, arm.directory, rel));
+  }
+  const data = await fs.readFile(target);
+  const upd = (inv) => { const e = inv.find((x) => x.path === rel); e.bytes = data.length; e.sha256 = sha(data); };
+  upd(f.manifest.frozen.inventory);
+  f.manifest.frozen.sha256 = sha(JSON.stringify(f.manifest.frozen.inventory, null, 2) + "\n");
+  for (const arm of f.manifest.arms.filter((a) => a.condition === "trail-on")) upd(arm.inventory);
+  await fs.writeFile(path.join(f.out, "manifest.json"), JSON.stringify(f.manifest, null, 2) + "\n");
+  assert.equal((await verify(f.out)).status, "PASS");
+  await assert.rejects(verify(f.out, { expectedManifestSha256: pin }), /externally pinned/);
+  // Ordinary tamper is also rejected under the pin.
+  await fs.writeFile(path.join(f.out, "tamper"), "x");
+  await assert.rejects(verify(f.out));
+});
+
+test("CLI pinned verify accepts the original pin and exits 2 on wrong pin", async (t) => {
+  const f = await prepared(t);
+  const pin = f.result.manifestSha256;
+  const good = JSON.parse((await run(process.execPath, [BIN, "verify", f.out, "--expected-manifest-sha256", pin])).stdout);
+  assert.equal(good.pinned, true);
+  await assert.rejects(run(process.execPath, [BIN, "verify", f.out, "--expected-manifest-sha256", "1".repeat(64)]),
+    (e) => e.code === 2 && JSON.parse(e.stderr).liveAllowed === false);
+  await assert.rejects(main(["verify", f.out, "--expected-manifest-sha256"]));
+  await assert.rejects(main(["verify", f.out, "--bogus", pin]));
+});
