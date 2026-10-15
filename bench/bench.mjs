@@ -3,17 +3,27 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { measureSession } from "./measure.mjs";
+import { measureSession, checkProvenanceExpectation } from "./measure.mjs";
 
-export const USAGE = "usage: node bench/bench.mjs <task.json> [--only cold|trail-on|trail-off] [--repeat N]\n" +
-  "       node bench/bench.mjs --measure-session <messages.jsonl> --task <task.json> [--account-root <dir>]";
+export const USAGE = "usage: node bench/bench.mjs <task.json> [--only cold|trail-on|trail-off] [--repeat N] [--model <id>|-m <id>]\n" +
+  "       node bench/bench.mjs --measure-session <messages.jsonl> --task <task.json> [--account-root <dir>]\n" +
+  "         [--expected-model <logged model id>] [--expected-provider <logged provider>]";
 
 export function parseArgs(argv) {
   const options = { repeat: 1, rotate: false };
-  const values = new Set(["only", "repeat", "model", "effort", "measure-session", "task", "account-root"]);
+  const values = new Set(["only", "repeat", "model", "effort", "measure-session", "task", "account-root",
+    "expected-model", "expected-provider"]);
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
+    let arg = argv[i];
+    let shortAlias = null;
+    if (arg === "-m" || arg.startsWith("-m=")) {
+      // -m is a strict alias for --model; it must never be silently ignored.
+      shortAlias = "-m";
+      arg = arg === "-m" ? "--model" : `--model${arg.slice(2)}`;
+    } else if (arg.startsWith("-") && !arg.startsWith("--")) {
+      throw new Error(`unsupported option: ${argv[i]}`);
+    }
     if (!arg.startsWith("--")) {
       if (options.taskFile) throw new Error("only one positional task file is allowed");
       options.taskFile = arg;
@@ -21,7 +31,7 @@ export function parseArgs(argv) {
     }
     const equal = arg.indexOf("=");
     const key = arg.slice(2, equal < 0 ? undefined : equal);
-    if (seen.has(key)) throw new Error(`duplicate --${key}`);
+    if (seen.has(key)) throw new Error(`duplicate --${key}${shortAlias ? ` (${shortAlias} alias)` : ""}`);
     seen.add(key);
     if (key === "rotate" && equal < 0) {
       options.rotate = true;
@@ -29,7 +39,11 @@ export function parseArgs(argv) {
     }
     if (!values.has(key)) throw new Error(`unsupported option: ${arg}`);
     const value = equal < 0 ? argv[++i] : arg.slice(equal + 1);
-    if (!value || value.startsWith("--")) throw new Error(`--${key} requires a value`);
+    const flag = shortAlias ?? `--${key}`;
+    const identityKey = ["model", "expected-model", "expected-provider"].includes(key);
+    if (!value || value.startsWith("--") || (identityKey && value.startsWith("-"))) {
+      throw new Error(`${flag} requires a value`);
+    }
     options[key] = value;
   }
   if (options.task && options.taskFile) throw new Error("use --task or a positional task, not both");
@@ -43,7 +57,7 @@ export function parseArgs(argv) {
   }
   options.repeat = Number(options.repeat);
   if (options["measure-session"] && [...seen].some((key) =>
-    !["measure-session", "task", "account-root"].includes(key))) {
+    !["measure-session", "task", "account-root", "expected-model", "expected-provider"].includes(key))) {
     throw new Error("read-only measurement cannot use live benchmark options");
   }
   return options;
@@ -66,13 +80,28 @@ export async function main(argv) {
   const options = parseArgs(argv);
   if (!options["measure-session"]) requireLiveIsolation(options);
   const task = JSON.parse(await fs.readFile(options.taskFile, "utf8"));
-  return measureSession(options["measure-session"], task, options["account-root"]);
+  const result = await measureSession(options["measure-session"], task, options["account-root"]);
+  if (options["expected-model"] || options["expected-provider"]) {
+    const expectation = checkProvenanceExpectation(result.provenance, {
+      model: options["expected-model"] ?? null,
+      provider: options["expected-provider"] ?? null,
+    });
+    result.provenance.expectation = expectation;
+    result.provenance.verified = expectation.satisfied;
+    if (!expectation.satisfied) {
+      const error = new Error("model provenance expectation failed: " + expectation.problems.join("; "));
+      error.result = result;
+      throw error;
+    }
+  }
+  return result;
 }
 
 if (import.meta.url === pathToFileURL(path.resolve(process.argv[1] || "")).href) {
   try {
     console.log(JSON.stringify(await main(process.argv.slice(2)), null, 2));
   } catch (error) {
+    if (error.result) console.log(JSON.stringify(error.result, null, 2));
     console.error(error.message);
     process.exitCode = 2;
   }

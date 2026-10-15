@@ -8,7 +8,8 @@ import { syncBuiltinESMExports } from "node:module";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { main, parseArgs } from "../bench/bench.mjs";
-import { attributeSession, checkedSpawnSync, measureMessages, measureSession } from "../bench/measure.mjs";
+import { attributeSession, checkedSpawnSync, checkProvenanceExpectation,
+  measureMessages, measureSession } from "../bench/measure.mjs";
 
 const run = promisify(execFile);
 const BIN = fileURLToPath(new URL("../bench/bench.mjs", import.meta.url));
@@ -17,6 +18,18 @@ const text = (role, value, stopReason) => ({
   role, content: [{ type: "text", text: value }], ...(stopReason ? { stopReason } : {}),
 });
 const call = (name, args = {}) => ({ type: "toolCall", name, arguments: args });
+// Assistant message shaped like real Aside logs: model/provider logged at the
+// message level, exactly as they appear in messages.jsonl.
+const modeled = (model, provider, extra = {}) => ({
+  role: "assistant",
+  content: [{ type: "text", text: "shipment" }],
+  stopReason: "stop",
+  ...(model == null ? {} : { model }),
+  ...(provider == null ? {} : { provider }),
+  ...extra,
+});
+const GLM = "z-ai/glm-5.3-flash-ultrafast";
+const MUSE = "openrouter/meta/muse-spark-1.3-contributor";
 
 async function fixture(t, messages) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "trail-bench-"));
@@ -43,7 +56,7 @@ test("historical semantics count every tool and sum usage without claiming fairn
   ];
   const f = await fixture(t, messages);
   const result = await measureSession(f.file, task, f.account);
-  assert.equal(result.schemaVersion, 2);
+  assert.equal(result.schemaVersion, 3);
   assert.equal(result.toolCalls, 126);
   assert.equal(result.replCalls, 84);
   assert.equal(result.toolCounts.bash, 42);
@@ -171,4 +184,192 @@ test("read-only CLI uses the explicit session and validates account root without
   await assert.rejects(run(process.execPath, [BIN, f.taskFile, "--only=trail-off"], { cwd: f.root }),
     (e) => e.code === 2 && e.stderr.includes("FAIRNESS-FIRST"));
   assert.deepEqual((await fs.readdir(f.root)).sort(), ["account", "task.json"]);
+});
+
+test("model provenance measures every assistant message and flags one consistent identity", () => {
+  const messages = [
+    text("user", "go"),
+    modeled(GLM, "opengateway", { content: [call("repl")], stopReason: "toolUse" }),
+    text("toolResult", "ok"),
+    modeled(GLM, "opengateway"),
+    text("toolResult", "ok"),
+    modeled(GLM, "opengateway"),
+  ];
+  const provenance = measureMessages(messages, task).provenance;
+  assert.equal(provenance.assistantMessages, 3);
+  assert.deepEqual(provenance.identities, [`opengateway/${GLM}`]);
+  assert.deepEqual(provenance.flags, { consistent: true, mixed: false, missing: false });
+  assert.equal(provenance.expectation, null);
+  assert.equal(provenance.verified, null); // observations only, not a verification
+  assert.deepEqual(provenance.observations.map((o) => o.message), [2, 4, 6]);
+  for (const observation of provenance.observations) {
+    assert.equal(observation.model, GLM);
+    assert.equal(observation.provider, "opengateway");
+    assert.equal(observation.sources.model, "message.model");
+    assert.equal(observation.sources.provider, "message.provider");
+  }
+});
+
+test("model provenance flags mixed identities with sorted unique entries", () => {
+  const provenance = measureMessages([
+    modeled(MUSE, "openrouter"),
+    modeled(GLM, "opengateway"),
+    modeled(MUSE, "openrouter"),
+  ], task).provenance;
+  assert.deepEqual(provenance.identities, [`opengateway/${GLM}`, `openrouter/${MUSE}`]);
+  assert.deepEqual(provenance.flags, { consistent: false, mixed: true, missing: false });
+  assert.equal(checkProvenanceExpectation(provenance, { model: MUSE }).satisfied, false);
+  assert.equal(checkProvenanceExpectation(provenance, { model: GLM }).satisfied, false);
+});
+
+test("missing model metadata is unknown, never success", () => {
+  const partial = measureMessages([
+    text("assistant", "shipment", "stop"),
+    modeled(GLM, "opengateway"),
+    { role: "assistant", content: [{ type: "text", text: "shipment" }], stopReason: "stop" },
+    modeled(GLM, null),
+  ], task).provenance;
+  assert.deepEqual(partial.flags, { consistent: false, mixed: true, missing: true });
+  assert.deepEqual(partial.identities, [`opengateway/${GLM}`, `unknown/${GLM}`]);
+  assert.equal(partial.observations[0].model, null);
+  assert.ok(partial.observations[0].keys.includes("role"));
+  assert.equal(partial.observations[3].provider, null);
+  const empty = measureMessages([text("user", "shipment")], task).provenance;
+  assert.deepEqual(empty.identities, []);
+  assert.deepEqual(empty.flags, { consistent: false, mixed: false, missing: true });
+  assert.equal(empty.verified, null);
+});
+
+test("expectations match logged identity strings exactly or reject", () => {
+  const consistent = measureMessages([modeled(GLM, "opengateway"), modeled(GLM, "opengateway")], task).provenance;
+  assert.deepEqual(checkProvenanceExpectation(consistent, { model: GLM, provider: "opengateway" }),
+    { model: GLM, provider: "opengateway", satisfied: true, problems: [] });
+  const mismatch = checkProvenanceExpectation(consistent, { model: MUSE });
+  assert.equal(mismatch.satisfied, false);
+  assert.ok(mismatch.problems[0].includes(MUSE) && mismatch.problems[0].includes(GLM));
+  // No alias resolution, no normalization: route aliases and case changes do not match.
+  for (const expected of ["muse", "muse-spark-1.3-contributor", "glm-5.3-flash-ultrafast",
+    "Z-AI/GLM-5.3-FLASH-ULTRAFAST", `opengateway/${GLM}`, "z-ai/glm-5.3"])
+    assert.equal(checkProvenanceExpectation(consistent, { model: expected }).satisfied, false);
+  assert.equal(checkProvenanceExpectation(consistent, { model: GLM, provider: "xiaomi" }).satisfied, false);
+  // Missing metadata with an expectation given is a rejection, not a pass.
+  const missing = measureMessages([text("assistant", "shipment", "stop")], task).provenance;
+  for (const expected of [{ model: GLM }, { provider: "opengateway" }, { model: GLM, provider: "opengateway" }]) {
+    const check = checkProvenanceExpectation(missing, expected);
+    assert.equal(check.satisfied, false);
+    assert.ok(check.problems.some((problem) => /metadata missing/.test(problem)));
+  }
+  assert.throws(() => checkProvenanceExpectation(consistent, {}));
+});
+
+test("read-only expectations accept exact matches and reject mismatches with the report attached", async (t) => {
+  const f = await fixture(t, [modeled(GLM, "opengateway"), modeled(GLM, "opengateway")]);
+  const ok = await main(["--measure-session", f.file, "--task", f.taskFile, "--account-root", f.account,
+    "--expected-model", GLM, "--expected-provider", "opengateway"]);
+  assert.equal(ok.provenance.verified, true);
+  assert.deepEqual(ok.provenance.expectation,
+    { model: GLM, provider: "opengateway", satisfied: true, problems: [] });
+  await assert.rejects(main(["--measure-session", f.file, "--task", f.taskFile,
+    "--expected-model", MUSE]), (error) => {
+      assert.match(error.message, /model provenance expectation failed/);
+      assert.equal(error.result.provenance.verified, false);
+      assert.deepEqual(error.result.provenance.identities, [`opengateway/${GLM}`]);
+      return true;
+    });
+  const noMetadata = await fixture(t, [text("assistant", "shipment", "stop")]);
+  await assert.rejects(main(["--measure-session", noMetadata.file, "--task", noMetadata.taskFile,
+    "--expected-model", GLM]), /metadata missing/);
+  await assert.rejects(main(["--measure-session", noMetadata.file, "--task", noMetadata.taskFile,
+    "--expected-provider", "opengateway"]), /metadata missing/);
+});
+
+test("CLI reports provenance for fixtures and historical logs and rejects expectations nonzero", async (t) => {
+  const f = await fixture(t, [modeled(GLM, "opengateway", { content: [call("repl")], stopReason: "toolUse" }),
+    text("toolResult", "ok"), modeled(GLM, "opengateway")]);
+  const observed = JSON.parse((await run(process.execPath,
+    [BIN, "--measure-session", f.file, "--task", f.taskFile], { cwd: f.root })).stdout);
+  assert.deepEqual(observed.provenance.identities, [`opengateway/${GLM}`]);
+  assert.deepEqual(observed.provenance.flags, { consistent: true, mixed: false, missing: false });
+  assert.equal(observed.provenance.verified, null);
+  const accepted = await run(process.execPath, [BIN, "--measure-session", f.file, "--task", f.taskFile,
+    "--expected-model", GLM, "--expected-provider", "opengateway"], { cwd: f.root });
+  assert.equal(JSON.parse(accepted.stdout).provenance.verified, true);
+  await assert.rejects(run(process.execPath, [BIN, "--measure-session", f.file, "--task", f.taskFile,
+    "--expected-model", MUSE], { cwd: f.root }), (error) => {
+      assert.equal(error.code, 2);
+      assert.match(error.stderr, /model provenance expectation failed/);
+      const report = JSON.parse(error.stdout);
+      assert.equal(report.provenance.verified, false);
+      assert.deepEqual(report.provenance.identities, [`opengateway/${GLM}`]);
+      return true;
+    });
+  await assert.rejects(run(process.execPath, [BIN, "--measure-session", f.file, "--task", f.taskFile,
+    "--expected-provider", "xiaomi-token-plan-sgp"], { cwd: f.root }), (e) => e.code === 2);
+  // Historical sanitized fixture: no model metadata is logged, so identity is unknown.
+  const historical = await fixture(t, []);
+  await fs.writeFile(historical.file,
+    await fs.readFile(fileURLToPath(new URL("./fixtures/run1.messages.jsonl", import.meta.url)), "utf8"));
+  const logged = JSON.parse((await run(process.execPath,
+    [BIN, "--measure-session", historical.file, "--task", historical.taskFile], { cwd: historical.root })).stdout);
+  assert.deepEqual(logged.provenance.identities, []);
+  assert.deepEqual(logged.provenance.flags, { consistent: false, mixed: false, missing: true });
+  assert.equal(logged.provenance.verified, null);
+  await assert.rejects(run(process.execPath, [BIN, "--measure-session", historical.file,
+    "--task", historical.taskFile, "--expected-model", GLM], { cwd: historical.root }),
+  (e) => e.code === 2 && /metadata missing/.test(e.stderr));
+  assert.deepEqual((await fs.readdir(f.root)).sort(), ["account", "task.json"]);
+});
+
+test("model alias -m is normalized or rejected, never silently ignored", () => {
+  assert.equal(parseArgs(["task.json", "-m", MUSE]).model, MUSE);
+  assert.equal(parseArgs(["task.json", `-m=${MUSE}`]).model, MUSE);
+  assert.equal(parseArgs(["task.json", "--model", MUSE]).model, MUSE);
+  for (const argv of [["task.json", "-m"], ["task.json", "-m="], ["task.json", "-m", "--effort", "off"],
+    ["task.json", "-m", "-x"], ["task.json", "-mx"], ["task.json", "-m", ""],
+    ["task.json", "-m", MUSE, "--model", MUSE], ["task.json", "--model", MUSE, "-m", MUSE],
+    ["task.json", "--model", "-x"]]) {
+    assert.throws(() => parseArgs(argv), undefined, JSON.stringify(argv));
+  }
+  // -m in read-only mode is still a live option: explicit rejection, not silence.
+  assert.throws(() => parseArgs(["--measure-session", "m.jsonl", "--task", "t.json", "-m", MUSE]),
+    /read-only measurement cannot use live benchmark options/);
+});
+
+test("expected-model and expected-provider are read-only options with strict values", () => {
+  const options = parseArgs(["--measure-session", "m.jsonl", "--task", "t.json",
+    "--expected-model", GLM, "--expected-provider", "opengateway"]);
+  assert.equal(options["expected-model"], GLM);
+  assert.equal(options["expected-provider"], "opengateway");
+  for (const argv of [["--measure-session", "m.jsonl", "--task", "t.json", "--expected-model"],
+    ["--measure-session", "m.jsonl", "--task", "t.json", "--expected-model", "--x"],
+    ["--measure-session", "m.jsonl", "--task", "t.json", "--expected-model", "-x"],
+    ["--measure-session", "m.jsonl", "--task", "t.json", "--expected-provider", ""],
+    ["--measure-session", "m.jsonl", "--task", "t.json", "--expected-model", GLM,
+      "--expected-model", MUSE]]) {
+    assert.throws(() => parseArgs(argv), undefined, JSON.stringify(argv));
+  }
+});
+
+test("partial or nested-only identities cannot satisfy provenance expectations", async (t) => {
+  for (const message of [
+    modeled(GLM, null),
+    { ...text("assistant", "shipment", "stop"), provider: "opengateway" },
+    { ...text("assistant", "shipment", "stop"),
+      metadata: { model: GLM, provider: "opengateway" } },
+  ]) {
+    const provenance = measureMessages([message], task).provenance;
+    assert.equal(provenance.flags.missing, true);
+    for (const expected of [{ model: GLM }, { provider: "opengateway" }]) {
+      assert.equal(checkProvenanceExpectation(provenance, expected).satisfied, false);
+    }
+    const f = await fixture(t, [message]);
+    for (const args of [["--expected-model", GLM], ["--expected-provider", "opengateway"]]) {
+      await assert.rejects(run(process.execPath, [BIN, "--measure-session", f.file,
+        "--task", f.taskFile, ...args]), (error) => {
+        assert.equal(error.code, 2);
+        assert.equal(JSON.parse(error.stdout).provenance.verified, false);
+        return true;
+      });
+    }
+  }
 });

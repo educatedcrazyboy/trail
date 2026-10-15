@@ -23,6 +23,60 @@ export function attributeSession(output, before, after) {
   return matches[0];
 }
 
+// Provider/model provenance audit. Identities are taken ONLY from model
+// metadata the session log actually recorded on each assistant response
+// message. Requested route aliases (for example "muse") are never inferred,
+// normalized, or matched: --expected-model compares the exact logged model ID
+// string. A message without logged identity is unknown, never success.
+// Reasoning effort is not part of this audit: it is not necessarily logged,
+// and absence of effort metadata stays unknown.
+export function extractLoggedIdentity(message) {
+  // Only the response fields observed in Aside logs are authoritative here.
+  // Nested metadata may describe a requested model, not the executed model.
+  const model = typeof message?.model === "string" && message.model.trim() ? message.model : null;
+  const provider = typeof message?.provider === "string" && message.provider.trim() ? message.provider : null;
+  return { model, provider, modelSource: model === null ? null : "message.model",
+    providerSource: provider === null ? null : "message.provider" };
+}
+
+// Exact-match check of expectations against logged identity strings. No alias
+// resolution and no normalization: the expected value must equal the logged
+// model ID (or provider) byte for byte. Missing metadata fails the check.
+export function checkProvenanceExpectation(provenance, expected) {
+  const wantModel = expected?.model ?? null;
+  const wantProvider = expected?.provider ?? null;
+  if (wantModel == null && wantProvider == null) {
+    throw new Error("an expected model or provider is required");
+  }
+  const problems = [];
+  if (!provenance.observations.length) problems.push("no assistant response messages observed");
+  for (const observation of provenance.observations) {
+    if (observation.model == null || observation.provider == null) {
+      problems.push(`assistant message ${observation.message}: logged provider/model metadata missing`);
+      continue;
+    }
+    if (wantModel != null) {
+      if (observation.model == null) {
+        problems.push(`assistant message ${observation.message}: logged model metadata missing ` +
+          `(expected ${JSON.stringify(wantModel)})`);
+      } else if (observation.model !== wantModel) {
+        problems.push(`assistant message ${observation.message}: logged model ` +
+          `${JSON.stringify(observation.model)} != expected ${JSON.stringify(wantModel)}`);
+      }
+    }
+    if (wantProvider != null) {
+      if (observation.provider == null) {
+        problems.push(`assistant message ${observation.message}: logged provider metadata missing ` +
+          `(expected ${JSON.stringify(wantProvider)})`);
+      } else if (observation.provider !== wantProvider) {
+        problems.push(`assistant message ${observation.message}: logged provider ` +
+          `${JSON.stringify(observation.provider)} != expected ${JSON.stringify(wantProvider)}`);
+      }
+    }
+  }
+  return { model: wantModel, provider: wantProvider, satisfied: problems.length === 0, problems };
+}
+
 export function measureMessages(messages, task) {
   if (!Array.isArray(task.doneCheck) || !task.doneCheck.length ||
     !task.doneCheck.every((s) => typeof s === "string" && s.length > 0)) {
@@ -32,10 +86,20 @@ export function measureMessages(messages, task) {
     input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 };
   const toolCounts = Object.create(null);
   const contamination = [];
+  const provenanceObservations = [];
   let finalAssistant = null;
   for (const [index, message] of messages.entries()) {
     if (message.role !== "assistant") continue;
     finalAssistant = message;
+    const identity = extractLoggedIdentity(message);
+    const observation = {
+      message: index + 1,
+      provider: identity.provider,
+      model: identity.model,
+      sources: { model: identity.modelSource, provider: identity.providerSource },
+    };
+    if (identity.model === null) observation.keys = Object.keys(message).sort();
+    provenanceObservations.push(observation);
     if (message.usage) {
       usage.messages++;
       for (const key of ["totalTokens", "input", "output", "cacheRead", "cacheWrite", "reasoning"]) {
@@ -76,8 +140,13 @@ export function measureMessages(messages, task) {
   const reasons = ["browser isolation evidence absent", "account memory isolation evidence absent",
     "automatic context injection not excluded"];
   if (contamination.length) reasons.push("observed memory access");
+  const identities = [...new Set(provenanceObservations
+    .map((o) => (o.provider == null && o.model == null) ? null : `${o.provider ?? "unknown"}/${o.model ?? "unknown"}`)
+    .filter((identity) => identity !== null))].sort();
+  const missing = provenanceObservations.length === 0 ||
+    provenanceObservations.some((o) => o.provider == null || o.model == null);
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     mode: "read-only-measurement",
     usage: { ...usage, semantics: "sum of recorded assistant usage; includes cache reads, not normalized inference cost" },
     toolCalls,
@@ -88,6 +157,20 @@ export function measureMessages(messages, task) {
     stopReason,
     budget: { kind: "advisory", toolCallLimit: 40, enforced: false, exceeded: toolCalls > 40 },
     contamination: { observed: contamination.length > 0, evidence: contamination, clean: null },
+    provenance: {
+      semantics: "provider/model identities as logged on every assistant response message; " +
+        "unknown is not success; no expectation means observations only, not a model verification",
+      assistantMessages: provenanceObservations.length,
+      identities,
+      observations: provenanceObservations,
+      flags: {
+        consistent: !missing && provenanceObservations.length > 0 && identities.length === 1,
+        mixed: identities.length > 1,
+        missing,
+      },
+      expectation: null,
+      verified: null,
+    },
     fairness: { valid: false, reasons },
   };
 }
