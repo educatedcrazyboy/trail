@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "codeCommit": "eae365d",
+  "scope": "Ten immediate local controls; no live Aside/provider benchmark",
+  "runtimeIsolation": "unverified",
+  "liveAllowed": false,
+  "paidModelCap": false,
+  "billing": "unknown",
+  "report": "docs/audit/immediate-controls-report.md",
+  "qa": "docs/audit/followup-lead-qa.md",
+  "items": [
+    {"number":1,"status":"pass","evidence":["bench/audit.mjs","test/audit.test.mjs","docs/audit/followup-cost-audit.json","docs/audit/followup-dag-usage.json"],"limit":"Missing historical child logs and replaced attempts explicitly uncovered; no claim of complete billed request cost."},
+    {"number":2,"status":"pass","evidence":["bench/local.mjs","bench/protocol.json","test/local.test.mjs","docs/audit/followup-lead-qa.md"],"limit":"Enforced in local mock dispatch only, not installed Senpi engine or actual model generation."},
+    {"number":3,"status":"pass","evidence":["docs/audit/historical-corrections.jsonl","docs/audit/historical-reclassification.md"],"limit":"Original historical SDK statuses preserved; not endorsed as current fair-success evidence."},
+    {"number":4,"status":"pass","evidence":["docs/audit/followup-cost-audit.json","docs/audit/followup-cost-audit.md"],"limit":"Identical argument hashes are not proof every repeat was unnecessary."},
+    {"number":5,"status":"pass","evidence":["bench/local-oracle.mjs","test/local.test.mjs","docs/audit/followup-lead-qa.md"],"limit":"Task-specific synthetic truth; historical prose not retroactively certified."},
+    {"number":6,"status":"pass","evidence":["bench/prepare.mjs","test/prepare.test.mjs",".omo/followup-prepare.md","docs/audit/followup-lead-qa.md"],"limit":"Only reviewed successful lifecycle shape is supported; arbitrary trailers stay rejected."},
+    {"number":7,"status":"pass","evidence":["bench/prepare.mjs","test/prepare.test.mjs","docs/audit/followup-lead-qa.md"],"limit":"Expected manifest pin must be trusted and kept outside the bundle."},
+    {"number":8,"status":"pass","evidence":["bench/local.mjs","bench/fixtures/local.json","bench/fixtures/local-adversarial.json","test/local.test.mjs"],"limit":"Loopback scripted HTTP policy is not actual Trail or browser performance."},
+    {"number":9,"status":"pass","evidence":["bench/protocol.json","docs/audit/local-protocol.md"],"limit":"Internal consistency pins do not prevent coherent replacement of protocol plus executor."},
+    {"number":10,"status":"pass","evidence":["bench/local.mjs","test/local.test.mjs","docs/audit/followup-lead-qa.md"],"limit":"Before/after files created automatically in new caller-owned output, QA copies removed after capture."}
+  ],
+  "regression":{"command":"node --test test/*.test.mjs","tests":76,"pass":76,"fail":0,"skip":0,"exitCode":0,"monitor":"mon_3KJC9P52RXXNEPD7"},
+  "surfaceResults":{"asideSessions":120,"unresolvedAsideSessions":0,"ambiguousAsideSessions":0,"localArms":18,"localTaskVerdicts":72,"faultCliRunsRejected":13,"localRequestsIncludingNegativeControls":209},
+  "cleanup":{"root":"/tmp/trail-followup.93DyJO","status":"removed-and-absence-verified","receipt":"FOLLOWUP_ROOT_AND_CACHES_CLEANUP_OK","notepadRetained":true}
+}

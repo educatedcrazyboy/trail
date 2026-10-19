@@ -120,6 +120,7 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
         if (!file) throw new Error("ingest needs a messages.jsonl path");
         const r = await core.ingestFile(home, path.resolve(file), {
           force: !!args.force,
+          accountRoot: args["account-root"] ? path.resolve(String(args["account-root"])) : undefined,
         });
         if (!r.fresh) {
           console.log(`session ${r.sessionId}: already ingested (use --force)`);
@@ -137,12 +138,22 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
       case "watch": {
         const accountRoot = await resolveAccountRoot(args, home);
         const once = !!args.once;
-        const interval = Number(args.interval || 30) * 1000;
+        const interval = core.watchIntervalSeconds(args.interval) * 1000;
+        await core.rotateWatchLog(home);
+        let busy = false;
         const tick = async () => {
-          const rs = await core.scanSessions(home, accountRoot);
-          const n = rs.filter((r) => r.fresh).length;
-          if (n) console.log(`[${new Date().toISOString()}] learned from ${n} session(s)`);
-          return n;
+          // a slow scan must never overlap the next tick — overlapping scans
+          // double distill work and race on state.json.
+          if (busy) return 0;
+          busy = true;
+          try {
+            const rs = await core.scanSessions(home, accountRoot);
+            const n = rs.filter((r) => r.fresh).length;
+            if (n) console.log(`[${new Date().toISOString()}] learned from ${n} session(s)`);
+            return n;
+          } finally {
+            busy = false;
+          }
         };
         if (once) {
           await tick();
@@ -159,14 +170,17 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
 
       case "start": {
         const st = await core.daemonStatus(home);
-        if (st.pid) {
-          console.log(`Trail watcher already running (pid ${st.pid}).`);
+        if (st.running || st.pid) {
+          console.log(`Trail watcher already running${st.pid ? ` (pid ${st.pid})` : " in launchd"}.`);
           return 0;
         }
+        await core.rotateWatchLog(home);
+        const interval = core.watchIntervalSeconds(args.interval);
+        const accountRoot = args["account-root"] ? path.resolve(String(args["account-root"])) : null;
         if (os.platform() === "darwin") {
           const plistPath = core.launchdPlistPath();
           await fs.mkdir(path.dirname(plistPath), { recursive: true });
-          await fs.writeFile(plistPath, core.buildLaunchdPlist(home));
+          await fs.writeFile(plistPath, core.buildLaunchdPlist(home, { interval, accountRoot }));
           try {
             await execFileP("launchctl", ["bootout", `gui/${process.getuid()}`, plistPath]);
           } catch {}
@@ -189,9 +203,12 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
           "trail.js"
         );
         const logFd = await fs.open(path.join(home, "watch.log"), "a");
+        const childArgs = [cli, "watch", "--home", home];
+        if (args.interval) childArgs.push("--interval", String(core.watchIntervalSeconds(args.interval)));
+        if (accountRoot) childArgs.push("--account-root", accountRoot);
         const child = spawn(
           process.execPath,
-          [cli, "watch", "--home", home],
+          childArgs,
           { detached: true, stdio: ["ignore", logFd.fd, logFd.fd] }
         );
         child.unref();
@@ -236,7 +253,7 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
         const cfg = await core.loadConfig(home);
         console.log(`learning: ${cfg.enabled !== false ? "on" : "paused (trail off)"}`);
         console.log(
-          `watcher:  ${st.pid ? `running (pid ${st.pid})` : st.installed ? "installed in launchd" : "not running"}`
+          `watcher:  ${st.running || st.pid ? `running${st.pid ? ` (pid ${st.pid})` : " in launchd"}` : st.installed ? "installed in launchd but not loaded" : "not running"}`
         );
         console.log(`log:      ${path.join(home, "watch.log")}`);
         return 0;
@@ -251,9 +268,13 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
           if (!d.isDirectory()) continue;
           const mem = await core.loadJson(path.join(sitesDir, d.name, "memory.json"));
           if (!mem?.host) continue;
-          const p = await core.emitSkill(home, accountRoot, mem.host);
-          console.log(`emitted ${mem.host} -> ${p}`);
-          n++;
+          const p = await core.emitSkill(home, accountRoot, mem.host, { skipThin: true });
+          if (p) {
+            console.log(`emitted ${mem.host} -> ${p}`);
+            n++;
+          } else {
+            console.log(`pruned ${mem.host} (nothing reusable — skill removed)`);
+          }
         }
         await core.syncAsideMemory(home, accountRoot);
         console.log(`${n} skill(s) up to date`);
@@ -267,7 +288,7 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
         for (const d of dirs) {
           if (!d.isDirectory()) continue;
           const mem = await core.loadJson(path.join(sitesDir, d.name, "memory.json"));
-          if (!mem?.host) continue;
+          if (!mem?.host || !core.siteWorthShowing(mem)) continue;
           rows.push({
             host: mem.host,
             routes: mem.routes?.length ?? 0,
@@ -299,10 +320,10 @@ Manage with: trail list | show <host> | forget <host> | off | on | report`);
           console.log("No sessions ingested yet.");
           return 0;
         }
-        console.log("session                replCalls  deltaTokens  sites");
+        console.log("session                replCalls  deltaTokens  sites                          reuse");
         for (const r of rows)
           console.log(
-            `${r.session.padEnd(22)} ${String(r.replCalls).padEnd(10)} ${String(r.deltaTokens).padEnd(12)} ${r.sites}`
+            `${r.session.padEnd(22)} ${String(r.replCalls).padEnd(10)} ${String(r.deltaTokens).padEnd(12)} ${r.sites.padEnd(30)} ${r.reuse || ""}`
           );
         return 0;
       }

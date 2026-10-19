@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "source": "native DAG snapshot runStats, not parsed task summaries",
+  "runId": "dag_144b4846-fe86-41f3-a884-370c58d6bc5d",
+  "generation": 2,
+  "snapshotComplete": true,
+  "billing": "unknown",
+  "scope": "Latest available completed node statistics at this snapshot. Not total cost of this request or all attempts.",
+  "notMergedWithRawSessionAudit": true,
+  "nodes": [
+    {"id":"audit","taskId":"st_01a13f57","state":"completed","input":68779,"output":22900,"cacheRead":4141184,"cacheWrite":null,"totalTokens":4232863,"reportedCostUsd":0.7806763999999999,"toolCalls":143,"turns":32},
+    {"id":"local","taskId":"st_01a13f64","state":"completed","input":95537,"output":13621,"cacheRead":2688128,"cacheWrite":null,"totalTokens":2797286,"reportedCostUsd":0.5960968000000001,"toolCalls":106,"turns":47},
+    {"id":"prepare","taskId":"st_01a13f59","state":"completed","input":26,"output":12409,"cacheRead":512478,"cacheWrite":63840,"totalTokens":588753,"reportedCostUsd":0.3349898,"toolCalls":18,"turns":11},
+    {"id":"verify","taskId":"st_01a13f71","state":"completed","input":137521,"output":15872,"cacheRead":3963904,"cacheWrite":null,"totalTokens":4117297,"reportedCostUsd":0.12265428,"toolCalls":228,"turns":68}
+  ],
+  "pendingAtSnapshot": [],
+  "notCovered": ["Main-session usage after the raw audit snapshot","Earlier attempts replaced by later DAG nodes","Unavailable historical child logs"],
+  "interpretation": "Repeated cached context contributes to processing volume. These are recorded usage and reported model-price estimates, not invoices. Missing fields remain null."
+}

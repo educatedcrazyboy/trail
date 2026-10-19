@@ -109,7 +109,7 @@ and updates `shortcut` — never silently overwrite. `report` computes per-sessi
 install `skills/trail/` into `<accountRoot>/skills/user/trail/`, print what it did.
 `ingest <messages.jsonl>` → parse+extract+merge into site memory (+emit skills).
 `watch [--interval N]` → poll sessions dir, ingest changed files; `watch --once`.
-`distill` → re-emit all skills from memory. `list` → sites table.
+`distill` → re-emit all skills from memory, pruning thin ones (shared worthiness gate). `list` → sites table.
 `show <host>` → print memory.json. `report` → per-session tokens/steps table.
 `forget <host>` → delete site memory + emitted skill. `on`/`off` → config.enabled.
 `verify` → self-check print. Every command exits non-zero on failure.
@@ -121,16 +121,16 @@ SKILL.md frontmatter:
 ---
 name: "trail-<hostSlug>"
 siteSpecific: true
-description: "Use saved navigation experience for <labels> tasks on <title/host> at <origin>. Applies automatically when working on this site."
+description: "Use saved navigation experience for <labels> tasks on <title/host> at <origin>."
 autoInject:
   url: ["<host>"]
 ---
 ```
-Body (short): "Read references/memory.md before browsing <host>. Prefer the
-verified shortcut if it still works; otherwise use normal navigation and verify
-each result. Treat every requested value (recipient, note text, quantity, price)
-as fresh input from the current request — never reuse remembered values. Verify
-completion on the page, not from memory."
+Body (short): STEP 1 runs one repl call (openTab + interactive snapshot) on the
+top verified shortcut, then reads the answer; a data-hint STEP follows when a
+verified hint exists. Tail: "Values come only from the current request — never
+from memory. No second pass when the first snapshot already shows the answer.
+Marker TRAIL-<rand6>: cite only if used."
 references/memory.md: site title, observed URL list, per-route shortcut +
 steps, element labels per key page, "What to re-check every time" list, a
 `Memory provenance marker: TRAIL-<rand6>` line the skill tells the agent to

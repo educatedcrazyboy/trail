@@ -2,6 +2,7 @@
 // distill them into per-site memory, and emit Aside user skills.
 // Node >= 18, ESM, zero dependencies.
 
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -117,8 +118,6 @@ const DATA_SOURCE_PATTERNS = [
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const PHONE_RE = /(?:\+?\d[\d\s-]{7,}\d)/g;
 const CARD_RE = /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g;
-const SECRETISH_RE =
-  /(password|passwd|비밀번호|token|apikey|api[_-]?key|secret|cvv|cvc|카드번호)/i;
 
 export function sanitizeValue(s) {
   if (typeof s !== "string") return s;
@@ -234,14 +233,20 @@ export function hostOf(u) {
 // ---------- extraction ----------
 
 // Full extract from one transcript file:
+// Session id from the path alone — no file read, so watch can stat-first.
+function sessionIdOf(file) {
+  const dir = path.basename(path.dirname(file));
+  // Aside dirs look like 2026-10-09_<id>; fall back to the filename stem.
+  // A bare "messages.jsonl" stem collides across directories — prefix the dir.
+  if (dir.includes("_")) return dir.split("_").pop();
+  const stem = path.basename(file).replace(/\.messages\.jsonl$|\.jsonl$/, "");
+  return stem === "messages" ? `${dir}-messages` : stem;
+}
 // { sessionId, dir, userPrompt, sites: { host: { steps, firstTotal, lastTotal, replCalls } }, totals }
 export async function extractSession(file) {
   const messages = await parseMessagesJsonl(file);
   const dir = path.basename(path.dirname(file));
-  // Aside dirs look like 2026-10-09_<id>; fall back to the filename stem.
-  const sessionId = dir.includes("_")
-    ? dir.split("_").pop()
-    : path.basename(file).replace(/\.messages\.jsonl$|\.jsonl$/, "");
+  const sessionId = sessionIdOf(file);
   const extracted = {
     sessionId,
     dir,
@@ -328,9 +333,12 @@ export async function extractSession(file) {
           const h = hostOf(act.url);
           if (h) currentHost = h;
           // a navigate that landed on a browser error page (404, DNS fail)
-          // teaches nothing — don't record its path as a route step.
+          // teaches nothing — don't record its path as a route step. Some
+          // error results carry no parseable snapshot (bare "page → URL"),
+          // so match the raw result text too.
           const failed =
-            !!page?.url && /^(chrome-error:|edge-error:|about:blank)/.test(page.url);
+            (!!page?.url && /^(chrome-error:|edge-error:|about:blank)/.test(page.url)) ||
+            /(chrome-error:|edge-error:|about:blank)/.test(resultText || "");
           pushStep(currentHost, {
             kind: "navigate",
             url: sanitizeUrl(act.url),
@@ -379,7 +387,11 @@ export async function extractSession(file) {
         } else if (act.kind === "fill") {
           // resolve the field's label from the LAST seen page snapshot when the
           // selector is a ref (eN); never store the typed value.
-          const field = act.selector && /^e\d+$/.test(act.selector) ? null : act.selector;
+          let field = act.selector;
+          if (field && /^e\d+$/.test(field)) {
+            const hit = extracted.sites[currentHost]?.lastPage?.elementRefs?.[field];
+            field = hit?.label ? sanitizeLabel(hit.label) : null;
+          }
           const stepHost = currentHost || pageHost;
           const sameHost = !!(pageHost && pageHost === stepHost);
           pushStep(stepHost, {
@@ -447,15 +459,6 @@ export async function extractSession(file) {
   return extracted;
 }
 
-export function stepsByHost(steps) {
-  const out = {};
-  for (const s of steps) {
-    const h = s.host || "unknown";
-    (out[h] ??= []).push(s);
-  }
-  return out;
-}
-
 // ---------- storage ----------
 
 export async function loadJson(file, fallback = null) {
@@ -508,15 +511,65 @@ function nowIso() {
 }
 
 // ---------- distill ----------
+// Hosts that are browser error pages or extractor fallbacks — never sites.
+// Shared by distill, ingest records, and report so all three agree.
+function isJunkHost(host) {
+  return host === "unknown" || /chromewebdata|^chrome\.|^edge\.|^devtools$|^about$/.test(host);
+}
+
+function normHintSource(s) {
+  return String(s || "").toLowerCase().replace(/[\s'"]+/g, "");
+}
+
+// Prior-memory signals for reuse scoring: known shortcuts + known dataHint
+// sources, in the same normalized form the extractor records.
+export function priorMemorySignals(mem) {
+  const shortcuts = new Set();
+  for (const r of mem?.routes || []) {
+    if (r.shortcut && r.shortcut !== "/" && !/[{}]/.test(r.shortcut)) shortcuts.add(r.shortcut);
+  }
+  const hintSources = new Set();
+  for (const h of mem?.dataHints || []) hintSources.add(normHintSource(h.source));
+  for (const pg of Object.values(mem?.pages || {})) {
+    for (const h of pg.dataHints || []) hintSources.add(normHintSource(h.source));
+  }
+  return { shortcuts, hintSources };
+}
+
+// Offline reuse scoring: did this session's FIRST moves already use prior
+// memory? Prompt-injected index use leaves no file read, so the observable
+// proxies are an opening navigation straight to a known shortcut, and a
+// page.evaluate against a known dataHint source. Pure + offline — feeds both
+// ingest state and transcript-replay checks without a model or browser.
+export function scoreReuse(priorByHost, extracted) {
+  const out = {};
+  for (const [host, site] of Object.entries(extracted?.sites || {})) {
+    const prior = priorByHost[host];
+    if (!prior) continue;
+    const navs = (site.steps || []).filter((s) => s.kind === "navigate" && !s.failed);
+    const index = navs.slice(0, 2).some((n) => prior.shortcuts.has(n.urlPath));
+    // only opening evals count: an eval after a long DOM walk used live
+    // discovery, not memory.
+    const hint = (site.steps || [])
+      .slice(0, 4)
+      .filter((s) => s.kind === "eval" && s.ok && s.source)
+      .some((e) => prior.hintSources.has(normHintSource(e.source)));
+    if (index || hint) out[host] = { index, hint };
+  }
+  return out;
+}
 
 // merge extracted session steps into per-site memory, emit skills.
-export async function distillFlows(home, extracted) {
+export async function distillFlows(home, extracted, opts = {}) {
   const cfg = await loadConfig(home);
+  // an explicit CLI --account-root beats the stored config: emission must land
+  // where the caller pointed, not where an old config points.
+  const accountRoot = opts.accountRoot || cfg.accountRoot || DEFAULT_ACCOUNT_ROOT;
   const results = [];
+  let touched = false;
   for (const [host, site] of Object.entries(extracted.sites || {})) {
-    if (host === "unknown") continue;
     // browser error pages are not sites — skip chromewebdata & friends
-    if (/chromewebdata|^chrome\.|^edge\.|^devtools$|^about$/.test(host)) continue;
+    if (isJunkHost(host)) continue;
     const memFile = memoryPath(home, host);
     const mem =
       (await loadJson(memFile)) ?? {
@@ -658,7 +711,7 @@ export async function distillFlows(home, extracted) {
       if (lastStable === "/") literalSteps.length = 0;
       const lastStableOk = lastStable && lastStable !== "/" ? lastStable : null;
       const key = endPath.split("?")[0] + "::" + (site.lastPage?.heading || "");
-      const existing = mem.routes.find((r) => r.key === key || samePath(r.steps, preCompletion));
+      const existing = mem.routes.find((r) => r.key === key || sameRoute(r.steps, preCompletion));
       // label = the TASK page heading (last page before the completion page),
       // not the completion heading — agents match skills on task wording.
       const taskPath = lastStableOk || endPath;
@@ -684,6 +737,16 @@ export async function distillFlows(home, extracted) {
             what: `shortcut ${existing.shortcut} -> ${lastStableOk}`,
             evidence: `session ${extracted.sessionId}`,
           });
+          // negative entry: the old shortcut already cost one wasted
+          // round-trip — never suggest it again until a later session
+          // re-verifies it (see topShortcuts).
+          (mem.failedShortcuts ??= []).push({
+            shortcut: existing.shortcut,
+            at: nowIso(),
+            evidence: `session ${extracted.sessionId}`,
+          });
+          // bounded: old failures stop mattering once buried; keep newest 20.
+          mem.failedShortcuts = mem.failedShortcuts.slice(-20);
           existing.shortcut = lastStableOk;
         }
         if (!existing.shortcut && lastStableOk) existing.shortcut = lastStableOk;
@@ -706,17 +769,114 @@ export async function distillFlows(home, extracted) {
     await saveJson(memFile, mem);
     let emitted = null;
     if (cfg.emit !== false && cfg.enabled !== false) {
-      emitted = await emitSkill(home, cfg.accountRoot || DEFAULT_ACCOUNT_ROOT, host, { skipThin: true });
-      await syncAsideMemory(home, cfg.accountRoot || DEFAULT_ACCOUNT_ROOT);
+      emitted = await emitSkill(home, accountRoot, host, { skipThin: true });
+      touched = true;
     }
     results.push({ host, memory: memFile, emitted });
+  }
+  // one sync per distill, not per host: syncAsideMemory rewrites the whole
+  // MEMORY.md block, so N hosts cost N identical rewrites otherwise.
+  if (touched && cfg.emit !== false && cfg.enabled !== false) {
+    await syncAsideMemory(home, accountRoot);
   }
   return results;
 }
 
-function samePath(a, b) {
-  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-  return a.every((x, i) => x === b[i]);
+// Two visits are the same route when they walk the same pages ignoring a
+// leading site-root hop: an agent that opens `/` first and one that jumps
+// straight in learned the same thing. Exact-match before merged near-dupe
+// rows that split confidence across identical shortcuts.
+function sameRoute(a, b) {
+  const norm = (steps) => (Array.isArray(steps) ? steps.filter((s) => s && s !== "/") : []);
+  return (
+    norm(a).length === norm(b).length &&
+    norm(a).every((x, i) => x === norm(b)[i])
+  );
+}
+
+
+// Verified shortcuts for a site, best first: literal openable paths only,
+// most-verified first. A shortcut the agent already bounced off (in
+// failedShortcuts newer than the route's last success) is excluded until a
+// later session re-verifies it — one wasted round-trip max per redesign.
+function topShortcuts(mem, n = 3) {
+  const failed = new Map();
+  for (const f of mem.failedShortcuts || []) {
+    if (!failed.has(f.shortcut) || failed.get(f.shortcut) < f.at) failed.set(f.shortcut, f.at);
+  }
+  return (mem.routes || [])
+    .filter((r) => r.shortcut && r.shortcut !== "/" && !/[{}]/.test(r.shortcut) && (r.success || 0) >= 1)
+    .filter((r) => {
+      const bad = failed.get(r.shortcut);
+      return !bad || String(r.lastSeen || "") > bad;
+    })
+    .sort(
+      (a, b) =>
+        (b.success || 0) - (a.success || 0) ||
+        (b.seen || 0) - (a.seen || 0) ||
+        String(b.lastSeen || "").localeCompare(String(a.lastSeen || ""))
+    )
+    .map((r) => r.shortcut)
+    .filter((s, i, arr) => arr.indexOf(s) === i)
+    .slice(0, n);
+}
+
+// Pages proven by at least one verified route passing through them. Hints
+// and elements are only guidance when the agent can reach the page via a
+// proven path — otherwise they advertise unproven navigation.
+function verifiedPages(mem) {
+  const paths = new Set();
+  for (const r of verifiedRoutes(mem)) {
+    for (const s of r.steps || []) if (s) paths.add(s);
+    if (r.shortcut) paths.add(r.shortcut);
+  }
+  return paths;
+}
+
+// Hottest dataHint on verified ground. Shared by skill emission, the MEMORY
+// index, and list filtering so all three agree on worth. Page-level hints
+// count only when their page is verified; host-level hints only when the same
+// source sits on a verified page (ingest duplicates every hint to host
+// level). Unproven hints stay in memory.json.
+export function siteTopHint(mem) {
+  const routes = verifiedRoutes(mem);
+  if (!routes.length) return undefined;
+  // Ingest records every eval hint at host level AND on its page, so a bare
+  // host-level hint proves nothing about reachability. A host hint counts
+  // only when the same source also sits on a verified page.
+  const vp = verifiedPages(mem);
+  const verifiedSources = new Set();
+  const pageHints = [];
+  for (const [p, pg] of Object.entries(mem.pages || {})) {
+    if (!vp.has(p)) continue;
+    for (const h of pg.dataHints || []) {
+      verifiedSources.add(normHintSource(h.source));
+      pageHints.push(h);
+    }
+  }
+  const hostHints = (mem.dataHints || []).filter((h) => verifiedSources.has(normHintSource(h.source)));
+  return [...hostHints, ...pageHints]
+    .sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen))[0];
+}
+
+// Worth showing anywhere user- or agent-facing: at least one openable
+// shortcut or one dataHint. Anything thinner lives in memory.json only.
+export function siteWorthShowing(mem) {
+  // error-page hosts are never sites, however much history they carry.
+  if (isJunkHost(mem.host)) return false;
+  return topShortcuts(mem, 1).length > 0 || !!siteTopHint(mem);
+}
+// Cross-site edges proven by a verified source page. An edge whose origin
+// no verified route reaches advertises unproven navigation.
+function verifiedLeadsTo(mem) {
+  const vp = verifiedPages(mem);
+  return (mem.leadsTo || []).filter((e) => vp.has(e.fromPage));
+}
+
+// Routes proven at least once. Every prompt-facing surface sources from this;
+// thin memory stays in memory.json as history, never as guidance.
+function verifiedRoutes(mem) {
+  return (mem.routes || []).filter((r) => (r.success || 0) >= 1);
 }
 
 // ---------- skill emission ----------
@@ -737,28 +897,30 @@ export async function emitSkill(home, accountRoot, host, opts = {}) {
   // skipThin: when nothing is reusable, delete the skill instead of
   // leaving a stub — a stub still costs the agent a file read per task
   // and buys zero guidance.
-  if (opts.skipThin) {
-    const reusable = (mem.routes || []).some((r) => r.shortcut && r.shortcut !== "/" && !/[{}]/.test(r.shortcut))
-      || (mem.dataHints || []).length
-      || Object.values(mem.pages || {}).some((pg) => pg.dataHints?.length);
-    if (!reusable) {
-      await fs.rm(dir, { recursive: true, force: true });
-      return null;
-    }
+  // shared with list/index via siteWorthShowing: one definition of "reusable".
+  if (opts.skipThin && !siteWorthShowing(mem)) {
+    await fs.rm(dir, { recursive: true, force: true });
+    return null;
   }
+  // frontmatter is single-line YAML: a hostile page title carrying a newline
+  // plus `---` would break out of the description string. sanitizeLabel keeps
+  // one printable line; escapeYaml then handles the quotes.
+  const vpt = verifiedPages(mem);
   const title =
-    Object.values(mem.pages).find((p) => p.title)?.title || host;
+    sanitizeLabel(Object.entries(mem.pages).find(([p, pg]) => pg.title && vpt.has(p))?.[1]?.title || Object.values(mem.pages).find((p) => p.title)?.title || host) || host;
   const origin = `http://${host}`;
-  const labels = mem.routes.map((r) => r.label).slice(0, 3).join(", ");
-  const marker = `TRAIL-${rand6()}`;
+  const labels = sanitizeLabel(verifiedRoutes(mem).map((r) => r.label).slice(0, 3).join(", ")) || "recorded";
+  // stable per-site marker: echo attribution must survive re-emission, so the
+  // marker lives in memory.json and is minted once, not per emit.
+  if (!mem.marker) {
+    mem.marker = `TRAIL-${rand6()}`;
+    await saveJson(memoryPath(home, host), mem);
+  }
+  const marker = mem.marker;
   // surface the top data location inline — the agent never reads
   // references/memory.md in practice, so the hint must live in the
   // auto-injected body to be seen.
-  const topHint = [...(mem.dataHints || []), ...Object.values(mem.pages || {}).flatMap((pg) => pg.dataHints || [])]
-    .sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen))[0];
-  const hintPage = topHint
-    ? Object.entries(mem.pages).find(([, pg]) => pg.dataHints?.includes(topHint))?.[0]
-    : null;
+  const topHint = siteTopHint(mem);
   const dataHintLine = topHint
     ? `The answer was read from \`${topHint.source}\` — run ${hintRead(topHint.source)} before scanning the DOM.`
     : "";
@@ -769,11 +931,11 @@ export async function emitSkill(home, accountRoot, host, opts = {}) {
   // written as ONE repl call wherever possible — each call costs the
   // model a full round-trip, so batching is the largest wall-time lever
   // a skill can pull.
-  const goodRoute = (mem.routes || []).find((r) => r.shortcut && r.shortcut !== "/" && !/[{}]/.test(r.shortcut));
-  const hasShortcut = !!goodRoute;
+  const shortcuts = topShortcuts(mem, 3);
+  const hasShortcut = shortcuts.length > 0;
   const steps = [];
   if (hasShortcut)
-    steps.push(`STEP 1: in ONE repl call run const p = await openTab('${origin}${goodRoute.shortcut}'); console.log(p.url()); console.log((await snapshot(p,{interactive:true})).tree); and read the answer from that output.`);
+    steps.push(`STEP 1: in ONE repl call run const p = await openTab('${origin}${shortcuts[0]}'); console.log((await snapshot(p,{interactive:true})).tree); and read the answer from that output.${shortcuts.length > 1 ? ` Other verified shortcuts for other tasks: ${shortcuts.slice(1).map((s) => `open ${origin}${s}`).join("; ")}.` : ""}`);
   else
     steps.push(`STEP 1: open ${origin} and navigate to the page that fits the task.`);
   if (topHint)
@@ -783,13 +945,13 @@ export async function emitSkill(home, accountRoot, host, opts = {}) {
   else
     steps.push(`STEP ${steps.length + 1}: read the answer from the first snapshot. If the page title or path does not match the task, navigate normally.`);
   const skillBody = steps.length > 1 || topHint
-    ? steps.join(" ") + ` Values in the URL (order id, recipient, date) come only from the current request — never from memory. No second verification pass when the first snapshot already shows the answer. Marker ${marker}: cite only if you actually used this skill.`
+    ? steps.join(" ") + ` Values come only from the current request — never from memory. No second pass when the first snapshot already shows the answer. Marker ${marker}: cite only if used.`
     : `Nothing reusable is saved for ${host} yet — navigate normally.`;
 
   const skillMd = `---
 name: "trail-${slug}"
 siteSpecific: true
-description: "Use saved navigation experience for ${escapeYaml(labels || "recorded")} tasks on ${escapeYaml(title)} at ${origin}. Applies automatically when working on this site."
+description: "Use saved navigation experience for ${escapeYaml(labels || "recorded")} tasks on ${escapeYaml(title)} at ${origin}."
 autoInject:
   url: ["${host}"]
 ---
@@ -809,7 +971,7 @@ ${skillBody}
   // names, then cap the rest at 6 so a page dump stays small (dataHints now
   // carry the 'where the answer was' signal these lists were a proxy for).
   const usedLabels = new Set();
-  for (const e of mem.leadsTo || []) {
+  for (const e of verifiedLeadsTo(mem)) {
     const sm = (e.selector || "").match(/"([^"]+)"/);
     if (sm) usedLabels.add(sm[1]);
   }
@@ -823,7 +985,10 @@ ${skillBody}
     }
     return used.concat(rest.slice(0, 6));
   };
+  // pages no verified route reaches are history, not guidance.
+  const vp = verifiedPages(mem);
   for (const [p, pg] of Object.entries(mem.pages)) {
+    if (!vp.has(p)) continue;
     lines.push(`- ${p} — ${pg.heading || pg.title || "(page)"} (seen ${pg.count}x)`);
     const bits = [];
     const t = keepTrim(pg.elements?.textbox);
@@ -842,7 +1007,7 @@ ${skillBody}
     const words = name.replace(/Id$/, "").replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
     return "the " + (words || name);
   };
-  for (const r of mem.routes) {
+  for (const r of verifiedRoutes(mem)) {
     lines.push(`- ${r.label}: ${r.steps.join(" -> ")}`);
     if (r.shortcut && !isTemplate(r.shortcut)) {
       lines.push(`  - Shortcut: open ${origin}${r.shortcut} directly instead of walking the intermediate pages.`);
@@ -860,7 +1025,7 @@ ${skillBody}
   // dataHints: which source on a page held the answer — read it directly
   // instead of rescanning the DOM.
   const hintPages = Object.entries(mem.pages).filter(
-    ([, pg]) => pg.dataHints?.length
+    ([p, pg]) => pg.dataHints?.length && vp.has(p)
   );
   if (hintPages.length) {
     lines.push("");
@@ -878,10 +1043,10 @@ ${skillBody}
     }
     lines.push("");
   }
-  if (mem.leadsTo?.length) {
+  if (verifiedLeadsTo(mem).length) {
     lines.push("");
     lines.push("## Cross-site links");
-    for (const e of mem.leadsTo.slice(0, 8)) {
+    for (const e of verifiedLeadsTo(mem).slice(0, 8)) {
       const roleLabel = e.selector?.match(/^(link|button|textbox) "(.+)"$/);
       const src = roleLabel ? `${roleLabel[2]} ${roleLabel[1]}` : e.selector || `page ${e.fromPage || "/"}`;
       lines.push(`- ${src} leads to ${e.toHost}${e.toPath}.`);
@@ -922,6 +1087,33 @@ function escapeYaml(s) {
 // Markers let us rewrite just our block without touching the user's notes.
 const MEM_BEGIN = "<!-- TRAIL-BEGIN";
 const MEM_END = "<!-- TRAIL-END";
+// ---------- MEMORY.md index budget ----------
+// Every exec prompt pays for the whole index block, so rows are ranked by
+// confidence and cut twice: a row cap far below the old 50, and a byte
+// budget that first strips `also:` tails (nice-to-have destinations) from
+// the weakest rows, then drops weakest rows. Thin single-session learnings
+// still enter (they live in memory.json either way) but spill first.
+const INDEX_TOP_K = 12;
+const INDEX_MAX_BYTES = 6000;
+// rows share the budget with ~400 bytes of block header/footer, so reserve it.
+const INDEX_ROWS_BYTES = INDEX_MAX_BYTES - 400;
+
+// Confidence: repeated verified shortcuts outrank once-seen rows; a hot
+// dataHint counts too. Higher = more likely to save the next agent work.
+function indexConfidence(mem, topHint) {
+  // Depth beats breadth: the best-verified route dominates, extra routes add
+  // only a capped bonus (otherwise ten once-seen guesses outrank one proven
+  // shortcut). Higher = more likely to save the next agent work.
+  let best = 0;
+  let shortcuts = 0;
+  for (const r of verifiedRoutes(mem)) {
+    best = Math.max(best, (r.seen || 0) + (r.success || 0));
+    if (r.shortcut && r.shortcut !== "/" && !/[{}]/.test(r.shortcut)) shortcuts++;
+  }
+  const hintHits = topHint?.hits || 0;
+  const repeatSessions = (mem.sessions || []).length >= 2 ? 2 : 0;
+  return best * 2 + Math.min(shortcuts, 4) + Math.min(hintHits, 10) + repeatSessions;
+}
 
 export async function syncAsideMemory(home, accountRoot) {
   const memDir = path.join(accountRoot, "memory");
@@ -929,37 +1121,47 @@ export async function syncAsideMemory(home, accountRoot) {
   const sitesDir = path.join(home, "sites");
   const dirs = await fs.readdir(sitesDir, { withFileTypes: true }).catch(() => []);
   const entries = [];
+  const liveSlugs = new Set();
   for (const d of dirs) {
     if (!d.isDirectory()) continue;
     const mem = await loadJson(path.join(sitesDir, d.name, "memory.json"));
-    if (!mem?.host || (!mem.routes?.length && !mem.leadsTo?.length)) continue;
+    if (!mem?.host) continue;
+    liveSlugs.add(`trail-${siteSlug(d.name)}.md`);
+    // Nothing proven: legacy junk, or no verified route and no verified edge.
+    // Drop the site file so a stale detail cannot be found by accident, and
+    // never index. History stays in memory.json.
+    if (isJunkHost(mem.host) || (!verifiedRoutes(mem).length && !verifiedLeadsTo(mem).length)) {
+      await fs.rm(path.join(memDir, "sites", `trail-${siteSlug(mem.host)}.md`), { force: true });
+      continue;
+    }
     // decide worth FIRST: no literal shortcut and no data map means the
     // memory can save an agent no work — listing it only buys wasted
     // file reads. Drop the site file so it cannot be found by accident.
     // A "/" shortcut is worth nothing either — purge stale memories that
     // still carry one (pre-gate data or a dead-end wall route).
-    const first = (mem.routes || []).find((r) => r.shortcut && r.shortcut !== "/" && !/[{}]/.test(r.shortcut));
-    const topHint = [...(mem.dataHints || []), ...Object.values(mem.pages || {}).flatMap((pg) => pg.dataHints || [])]
-      .sort((a, b) => b.hits - a.hits || b.lastSeen.localeCompare(a.lastSeen))[0];
+    const cuts = topShortcuts(mem, 3);
+    const first = (mem.routes || []).find((r) => r.shortcut === cuts[0]);
+    const topHint = siteTopHint(mem);
     const siteFile = path.join(memDir, "sites", `trail-${siteSlug(mem.host)}.md`);
     if (!first && !topHint) {
       await fs.rm(siteFile, { force: true });
       continue;
     }
-    const title =
-      Object.values(mem.pages || {}).find((p) => p.title)?.title || mem.host;
-    const labels = (mem.routes || []).map((r) => r.label).join(", ");
     // per-site detail file in Aside's own memory tree
     await fs.mkdir(path.dirname(siteFile), { recursive: true });
     // compact: the agent only needs the route + where the data lives.
     // Prose and boilerplate stripped — this file is loaded per-request.
-    const routeLines = (mem.routes || []).filter((r) => r.shortcut && r.shortcut !== "/").map(
+    // unverified routes (success<1, e.g. never re-seen or demoted) are not
+    // advertised anywhere prompt-facing — neither here nor in the index tail.
+    const verified = verifiedRoutes(mem);
+    const routeLines = verified.filter((r) => r.shortcut && r.shortcut !== "/").map(
       (r) =>
         `- ${r.label}: shortcut: open ${r.shortcut}` +
         (/[{}]/.test(r.shortcut || "") ? " — template, substitute the named value first" : "")
     );
+    const vdf = verifiedPages(mem);
     const dataLines = Object.entries(mem.pages || {})
-      .filter(([, pg]) => pg.dataHints?.length)
+      .filter(([p, pg]) => pg.dataHints?.length && vdf.has(p))
       .flatMap(([p, pg]) =>
         pg.dataHints.map((h) => `- ${p}: ${hintRead(h.source)}`)
       )
@@ -969,10 +1171,10 @@ export async function syncAsideMemory(home, accountRoot) {
       `Guide: skills/user/trail-${siteSlug(mem.host)}/references/memory.md`,
       "",
       ...routeLines,
-      ...(mem.leadsTo?.length
+      ...(verifiedLeadsTo(mem).length
         ? [
             "",
-            ...mem.leadsTo.slice(0, 5).map((e) => {
+            ...verifiedLeadsTo(mem).slice(0, 5).map((e) => {
               const m = e.selector?.match(/^(link|button|textbox) "(.+)"$/);
               const src = m ? `${m[2]} ${m[1]}` : e.selector || `page ${e.fromPage || "/"}`;
               return `- ${src} → ${e.toHost}${e.toPath}`;
@@ -992,12 +1194,12 @@ export async function syncAsideMemory(home, accountRoot) {
     // trailing file pointer: the header names the per-site path pattern,
     // and in practice agents never open it — the index IS the channel.
     const destinations = [...new Set(
-      (mem.routes || [])
+      verified
         .map((r) => (r.steps || []).filter((s) => s && s !== "/"))
         .flat()
-        .concat((mem.routes || []).map((r) => r.steps?.[r.steps.length - 1]).filter(Boolean))
+        .concat(verified.map((r) => r.steps?.[r.steps.length - 1]).filter(Boolean))
     )]
-      .filter((s) => s !== first?.shortcut)
+      .filter((s) => !cuts.includes(s))
       .slice(-4);
     // {name} inside a destination is a URL hole, not a label: spell out
     // that it must be substituted with the value from the current page
@@ -1008,17 +1210,49 @@ export async function syncAsideMemory(home, accountRoot) {
       .join(", ");
     entries.push({
       ts: mem.updatedAt || "",
-      line:
-        `- ${mem.host} → ${first?.shortcut || Object.keys(mem.pages || {})[0] || "/"}` +
-        (destText ? ` · also: ${destText}` : "") +
-        (topHint ? ` · ${hintRead(topHint.source)}` : ""),
+      score: indexConfidence(mem, topHint),
+      // no openable shortcut: name the host plus the hint, never a root-open
+      // arrow ("/" is never a shortcut anywhere else).
+      head:
+        cuts[0]
+          ? `- ${mem.host} → ${cuts[0]}` +
+            (cuts.length > 1 ? ` (also ${cuts.slice(1).join(", ")})` : "") +
+            (topHint ? ` · ${hintRead(topHint.source)}` : "")
+          : `- ${mem.host}` + (topHint ? ` · ${hintRead(topHint.source)}` : ""),
+      also: destText ? ` · also: ${destText}` : "",
     });
   }
-  // cap the index: rows past ~50 only cost prompt tokens nobody reads
-  const lines = entries
-    .sort((a, b) => b.ts.localeCompare(a.ts))
-    .slice(0, 50)
-    .map((e) => e.line);
+  // orphan sweep: detail files with no matching site memory (manual deletion,
+  // renamed slug, empty leftover dir) are unreachable guidance — remove them.
+  {
+    const details = await fs.readdir(path.join(memDir, "sites")).catch(() => []);
+    for (const f of details) {
+      if (f.startsWith("trail-") && f.endsWith(".md") && !liveSlugs.has(f)) {
+        await fs.rm(path.join(memDir, "sites", f), { force: true });
+      }
+    }
+  }
+  // cheapest prompt tax first: confidence-ranked Top-K, then a byte budget.
+  // Over budget: strip `also:` tails from the weakest rows first, then drop
+  // weakest rows. Ties keep newest-first (previous behavior).
+  const ranked = entries
+    .sort((a, b) => b.score - a.score || b.ts.localeCompare(a.ts))
+    .slice(0, INDEX_TOP_K);
+  for (const e of ranked) e.line = e.head + e.also;
+  // prompt cost is bytes on the wire, not UTF-16 code units — CJK rows are
+  // ~3x under String.length.
+  const blockBytes = (lines) => Buffer.byteLength(lines.join("\n"), "utf8");
+  let lines = ranked.map((e) => e.line);
+  if (blockBytes(lines) > INDEX_ROWS_BYTES) {
+    for (let i = ranked.length - 1; i >= 0 && blockBytes(lines) > INDEX_ROWS_BYTES; i--) {
+      ranked[i].line = ranked[i].head;
+      lines = ranked.map((e) => e.line);
+    }
+  }
+  while (lines.length && blockBytes(lines) > INDEX_ROWS_BYTES) {
+    ranked.pop();
+    lines = ranked.map((e) => e.line);
+  }
   const block =
     `${MEM_BEGIN} -- managed by Trail, edits will be overwritten -->\n` +
     `## Trail: learned site shortcuts\n` +
@@ -1034,6 +1268,7 @@ export async function syncAsideMemory(home, accountRoot) {
   const next = re.test(cur)
     ? cur.replace(re, block)
     : block + "\n\n" + cur.trimStart();
+  await fs.mkdir(memDir, { recursive: true });
   await fs.writeFile(memFile, next);
   return entries.length;
 }
@@ -1084,7 +1319,7 @@ export function launchdPlistPath() {
   );
 }
 
-export function buildLaunchdPlist(home) {
+export function buildLaunchdPlist(home, opts = {}) {
   const cli = path.resolve(
     path.dirname(new URL(import.meta.url).pathname),
     "..",
@@ -1092,6 +1327,12 @@ export function buildLaunchdPlist(home) {
     "trail.js"
   );
   const log = path.join(home, "watch.log");
+  // plist is XML: a path with & or < would break the file or inject keys.
+  const xml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const extra = [
+    opts.interval != null && Number.isFinite(Number(opts.interval)) ? `    <string>--interval</string><string>${Number(opts.interval)}</string>\n` : "",
+    opts.accountRoot != null ? `    <string>--account-root</string><string>${xml(opts.accountRoot)}</string>\n` : "",
+  ].join("");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -1099,15 +1340,16 @@ export function buildLaunchdPlist(home) {
   <key>Label</key><string>${LAUNCHD_LABEL}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${process.execPath}</string>
-    <string>${cli}</string>
+    <string>${xml(process.execPath)}</string>
+    <string>${xml(cli)}</string>
     <string>watch</string>
-    <string>--home</string><string>${home}</string>
-  </array>
+    <string>--home</string><string>${xml(home)}</string>
+${extra}  </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>${log}</string>
-  <key>StandardErrorPath</key><string>${log}</string>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>StandardOutPath</key><string>${xml(log)}</string>
+  <key>StandardErrorPath</key><string>${xml(log)}</string>
 </dict>
 </plist>
 `;
@@ -1124,36 +1366,106 @@ export async function daemonStatus(home) {
       pid = st.pid;
     }
   } catch {}
-  return { installed, pid, plist };
+  // the pid file only covers the non-launchd path — on macOS ask launchctl
+  // whether our label is actually loaded instead of trusting the file.
+  let running = pid !== null;
+  if (os.platform() === "darwin" && installed) {
+    try {
+      const out = spawnSync("launchctl", ["list"], { encoding: "utf8" });
+      running = typeof out.stdout === "string" && out.stdout.includes(LAUNCHD_LABEL);
+    } catch {
+      running = false;
+    }
+  }
+  return { installed, pid, plist, running };
+}
+
+// launchd appends forever — rotate past 1 MiB so a crash loop cannot fill
+// the disk. Called on watch startup and daemon start, never mid-tick.
+export async function rotateWatchLog(home) {
+  const log = path.join(home, "watch.log");
+  const stat = await fs.stat(log).catch(() => null);
+  if (stat && stat.size > 1024 * 1024) {
+    await fs.rm(`${log}.1`, { force: true });
+    await fs.rename(log, `${log}.1`);
+  }
 }
 
 // ---------- ingest + scan ----------
+// Watch tick seconds from a CLI value: garbage in, safe 30 out. A NaN or
+// negative interval would otherwise hot-loop the watcher at full CPU.
+export function watchIntervalSeconds(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 30;
+}
+
+// A session file modified within SETTLE_MS is still being written —
+// distilling it now teaches partial routes (seen inflation) and repeats the
+// work next tick. Watch passes settle:true; manual ingest does not.
+const SETTLE_MS = 60 * 1000;
 
 export async function ingestFile(home, file, opts = {}) {
-  const extracted = await extractSession(file);
-  // remember processed offset for idempotent watch
+  // stat FIRST: an unchanged session costs one stat, not a full parse plus a
+  // state rewrite. A watch tick over N idle sessions is N stats.
+  const preId = sessionIdOf(file);
   const stateFile = path.join(home, "state.json");
   const state = (await loadJson(stateFile)) ?? { sessions: {} };
   const stat = await fs.stat(file).catch(() => null);
   const size = stat ? stat.size : 0;
-  const rec = state.sessions[extracted.sessionId];
-  const fresh = Boolean(!rec || size > (rec.bytes || 0) || opts.force);
+  const mtimeMs = stat ? stat.mtimeMs : 0;
+  const rec = state.sessions[preId];
+  // same-size rewrites still changed the transcript — compare mtime too, but
+  // only when a prior mtime was recorded (legacy seeded rows have none).
+  const mtimeFresh = Boolean(rec && rec.mtimeMs != null && mtimeMs > rec.mtimeMs);
+  if (rec && !opts.force && size <= (rec.bytes || 0) && !mtimeFresh) {
+    return { sessionId: preId, fresh: false, results: [], reuse: {} };
+  }
+  // A just-appeared file is the most likely to still be mid-write, so the
+  // settle guard applies with or without a prior record. Manual ingest never
+  // passes settle and is unaffected.
+  if (opts.settle && !opts.force && stat && Date.now() - stat.mtimeMs < SETTLE_MS) {
+    // still growing — distill on a later tick once it settles. Byte count is
+    // deliberately NOT updated so the growth is still picked up then.
+    return { sessionId: preId, fresh: false, results: [], reuse: {} };
+  }
+  const extracted = await extractSession(file);
+  // priors BEFORE distill: a session that teaches a shortcut must not match
+  // against its own just-written memory — reuse means using OLD memory.
+  const priorByHost = {};
+  for (const host of Object.keys(extracted.sites || {})) {
+    if (isJunkHost(host)) continue;
+    const pm = await loadJson(memoryPath(home, host));
+    if (pm) priorByHost[host] = priorMemorySignals(pm);
+  }
+  const fresh = Boolean(!rec || size > (rec.bytes || 0) || mtimeFresh || opts.force);
   let results = [];
+  let reuse = {};
   if (fresh) {
-    results = await distillFlows(home, extracted);
+    results = await distillFlows(home, extracted, { accountRoot: opts.accountRoot });
+    reuse = scoreReuse(priorByHost, extracted);
   }
   state.sessions[extracted.sessionId] = {
     dir: extracted.dir,
     bytes: size,
+    mtimeMs,
     ingestedAt: nowIso(),
-    deltaTotalTokens:
-      (extracted.totals.lastTotal || 0) - (extracted.totals.firstTotal || 0),
+    deltaTotalTokens: Math.max(
+      0,
+      (extracted.totals.lastTotal || 0) - (extracted.totals.firstTotal || 0)
+    ),
     replCalls: extracted.totals.replCalls,
-    sites: Object.keys(extracted.sites || {}),
+    sites: Object.keys(extracted.sites || {}).filter((h) => {
+      if (isJunkHost(h)) return false;
+      // a host that only ever failed to load taught nothing — listing it as
+      // "learned" is report fiction (dead-error navigations).
+      const steps = extracted.sites[h].steps || [];
+      return steps.some((s) => !s.failed && (s.pageUrl || s.urlPath || s.kind === "eval" || s.kind === "skill-read"));
+    }),
+    reuse,
     userPrompt: (extracted.userPrompt || "").slice(0, 160),
   };
   await saveJson(stateFile, state);
-  return { sessionId: extracted.sessionId, fresh, results };
+  return { sessionId: extracted.sessionId, fresh, results, reuse };
 }
 
 // Mark every existing session as seen at install time so `watch` only learns
@@ -1172,7 +1484,7 @@ export async function seedSessions(home, accountRoot) {
   for (const e of entries) {
     if (!e.isDirectory()) continue;
     const f = path.join(sessDir, e.name, "messages.jsonl");
-    const id = e.name.split("_").pop();
+    const id = sessionIdOf(f);
     if (state.sessions[id]) continue;
     const stat = await fs.stat(f).catch(() => null);
     state.sessions[id] = { dir: e.name, bytes: stat ? stat.size : 0, seeded: true };
@@ -1202,7 +1514,7 @@ export async function scanSessions(home, accountRoot) {
     }
   }
   const out = [];
-  for (const f of files) out.push(await ingestFile(home, f));
+  for (const f of files) out.push(await ingestFile(home, f, { settle: true, accountRoot }));
   return out;
 }
 
@@ -1216,9 +1528,12 @@ export async function report(home) {
     .filter(([, s]) => !s.seeded)
     .map(([id, s]) => ({
     session: id,
-    sites: (s.sites || []).join(","),
+    sites: (s.sites || []).filter((h) => !isJunkHost(h)).join(","),
     replCalls: s.replCalls ?? 0,
-    deltaTokens: s.deltaTotalTokens ?? 0,
+    deltaTokens: Math.max(0, s.deltaTotalTokens ?? 0),
+    reuse: Object.entries(s.reuse || {})
+      .map(([h, r]) => `${h}:${[r.index && "shortcut", r.hint && "hint"].filter(Boolean).join("+")}`)
+      .join(","),
     ingestedAt: s.ingestedAt,
     prompt: s.userPrompt || "",
   }));
